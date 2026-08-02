@@ -5,11 +5,6 @@
 **Package:** `@earendil-works/pi-platform` (new, `packages/platform`)
 **Date:** 2026-02-08
 
-> This document supersedes the outdated `docs/older_CAPABILITY_PLATFORM_DESIGN.md`.
-> The old design was written against v0.82.1 and contained inaccuracies. The
-> contracts package described here was designed against the current v0.83.0
-> codebase and its verified architecture report.
-
 ---
 
 ## 1. Deliverable Overview
