@@ -2,6 +2,7 @@ import { join } from "node:path";
 import { Agent, type AgentMessage, setDefaultStreamFn, type ThinkingLevel } from "@earendil-works/pi-agent-core";
 import { clampThinkingLevel, type Message, type Model, streamSimple } from "@earendil-works/pi-ai/compat";
 import { getAgentDir } from "../config.ts";
+import { ensurePlatformRuntime } from "../platform/platform-runtime.ts";
 import { resolvePath } from "../utils/paths.ts";
 import { AgentSession } from "./agent-session.ts";
 import { formatNoModelsAvailableMessage } from "./auth-guidance.ts";
@@ -372,6 +373,11 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		}
 		sessionManager.appendThinkingLevelChange(thinkingLevel);
 	}
+
+	// Boot the platform runtime (walking skeleton) so AgentSession's synchronous
+	// _buildRuntime can source the read tool definition from capability exports.
+	// Failure-safe: falls back to the legacy read path when the kernel cannot start.
+	await ensurePlatformRuntime();
 
 	const session = new AgentSession({
 		agent,

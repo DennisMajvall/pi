@@ -1,7 +1,7 @@
 {
   "name": "@earendil-works/pi-platform",
   "version": "0.83.0",
-  "description": "Capability platform contracts for pi - interfaces, types, and schemas only. Zero runtime behavior.",
+  "description": "Capability platform contracts + walking-skeleton kernel for pi. Contract subpaths are implementation-free; /kernel is the minimal runtime.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -37,6 +37,10 @@
     "./schema": {
       "types": "./dist/schema/index.d.ts",
       "import": "./dist/schema/index.js"
+    },
+    "./kernel": {
+      "types": "./dist/kernel/index.d.ts",
+      "import": "./dist/kernel/index.js"
     }
   },
   "files": ["dist", "README.md"],

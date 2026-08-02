@@ -87,6 +87,8 @@ export type CapabilityState = (typeof CapabilityState)[keyof typeof CapabilitySt
  * Contains enough metadata for runtime discovery WITHOUT loading implementation.
  */
 export interface CapabilityManifest {
+	/** Manifest schema version. Bump on breaking manifest changes. */
+	schemaVersion: 1;
 	/** Unique capability identifier: `<category>.<name>` */
 	id: CapabilityId;
 	/** SemVer version of this capability */
@@ -109,32 +111,104 @@ export interface CapabilityManifest {
  * Typed exports that this capability provides.
  * Other capabilities and hosts consume these via the registry.
  */
+/** Static declaration of a tool (discovery-time metadata; no implementation). */
+export interface ToolDeclaration {
+	name: string;
+	description: string;
+	parameters: TSchema;
+	promptSnippet?: string;
+	promptGuidelines?: string[];
+}
+
+/** Static declaration of a command. */
+export interface CommandDeclaration {
+	name: string;
+	description: string;
+	argumentHint?: string;
+}
+
+/** Static declaration of a prompt template/skill. */
+export interface PromptDeclaration {
+	name: string;
+	description: string;
+	argumentHint?: string;
+}
+
+/** Static declaration of a context provider. */
+export interface ContextDeclaration {
+	name: string;
+	description: string;
+}
+
+/** Static declaration of a model provider. */
+export interface ModelDeclaration {
+	providerId: string;
+	providerName: string;
+	models: ModelDefinition[];
+	authType: "api_key" | "oauth" | "none";
+	authEnvVar?: string;
+}
+
+/** Static declaration of a theme. */
+export interface ThemeDeclaration {
+	name: string;
+	colors: Record<string, string>;
+	editorTheme?: string;
+	extends?: string;
+}
+
+/** Static declaration of a policy. */
+export interface PolicyDeclaration {
+	name: string;
+	type: string;
+}
+
+/** Static declaration of an executor. */
+export interface ExecutorDeclaration {
+	name: string;
+}
+
+/** Static declaration of a memory system. */
+export interface MemoryDeclaration {
+	name: string;
+	scopes: Array<"session" | "project" | "user" | "global">;
+}
+
+/** Static declaration of an orchestration capability. */
+export interface OrchestrationDeclaration {
+	name: string;
+}
+
+/** Static declaration of a UI contribution. */
+export interface UIDeclaration {
+	name: string;
+	components: Array<{ type: string; key: string }>;
+}
+
+/** Static declaration of event handler subscriptions. */
+export interface EventDeclaration {
+	name: string;
+	subscriptions: Array<{ eventType: string; priority?: number }>;
+}
+
+/**
+ * Typed declaration of what a capability provides.
+ * Static, serializable, discoverable without loading the implementation.
+ */
 export interface CapabilityProvides {
-	/** Tool definition + execution */
-	tool?: ToolCapabilityExport;
-	/** Slash command */
-	command?: CommandCapabilityExport;
-	/** Prompt template/skill */
-	prompt?: PromptCapabilityExport;
-	/** Context provider */
-	context?: ContextCapabilityExport;
-	/** Model provider */
-	model?: ModelCapabilityExport;
-	/** Theme */
-	theme?: ThemeCapabilityExport;
-	/** Policy (compaction, retry, approval) */
-	policy?: PolicyCapabilityExport;
-	/** Executor environment */
-	executor?: ExecutorCapabilityExport;
-	/** Memory system */
-	memory?: MemoryCapabilityExport;
-	/** Orchestration */
-	orchestration?: OrchestrationCapabilityExport;
-	/** UI contribution */
-	ui?: UICapabilityExport;
-	/** Event handler */
-	event?: EventCapabilityExport;
-	/** Arbitrary custom exports */
+	tool?: ToolDeclaration;
+	command?: CommandDeclaration;
+	prompt?: PromptDeclaration;
+	context?: ContextDeclaration;
+	model?: ModelDeclaration;
+	theme?: ThemeDeclaration;
+	policy?: PolicyDeclaration;
+	executor?: ExecutorDeclaration;
+	memory?: MemoryDeclaration;
+	orchestration?: OrchestrationDeclaration;
+	ui?: UIDeclaration;
+	event?: EventDeclaration;
+	/** Arbitrary custom declarations */
 	[key: string]: unknown;
 }
 

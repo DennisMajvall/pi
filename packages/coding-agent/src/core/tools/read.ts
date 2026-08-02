@@ -11,18 +11,17 @@ import { getLanguageFromPath, highlightCode, type Theme } from "../../modes/inte
 import { processImage } from "../../utils/image-process.ts";
 import { detectSupportedImageMimeTypeFromFile } from "../../utils/mime.ts";
 import { formatPathRelativeToCwdOrAbsolute } from "../../utils/paths.ts";
-import type { ToolDefinition, ToolRenderResultOptions } from "../extensions/types.ts";
+import type { ToolDefinition, ToolRenderContext, ToolRenderResultOptions } from "../extensions/types.ts";
 import { resolveReadPathAsync, resolveToCwd } from "./path-utils.ts";
 import { getTextOutput, renderToolPath, replaceTabs, str } from "./render-utils.ts";
 import { wrapToolDefinition } from "./tool-definition-wrapper.ts";
 import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, formatSize, type TruncationResult, truncateHead } from "./truncate.ts";
 
-const readSchema = Type.Object({
+export const readSchema = Type.Object({
 	path: Type.String({ description: "Path to the file to read (relative or absolute)" }),
 	offset: Type.Optional(Type.Number({ description: "Line number to start reading from (1-indexed)" })),
 	limit: Type.Optional(Type.Number({ description: "Maximum number of lines to read" })),
 });
-
 export type ReadToolInput = Static<typeof readSchema>;
 
 export interface ReadToolDetails {
@@ -62,7 +61,41 @@ export interface ReadToolOptions {
 	operations?: ReadOperations;
 }
 
-type ReadRenderArgs = { path?: string; file_path?: string; offset?: number; limit?: number };
+export type ReadRenderArgs = { path?: string; file_path?: string; offset?: number; limit?: number };
+
+/**
+ * TUI renderer for the read tool call row.
+ * Extracted to module scope so the platform capability can attach it.
+ */
+export function renderReadCall(
+	args: ReadRenderArgs | undefined,
+	theme: Theme,
+	context: ToolRenderContext<unknown, ReadRenderArgs | undefined>,
+): Text {
+	const text = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
+	const classification = !context.expanded ? getCompactReadClassification(args, context.cwd) : undefined;
+	text.setText(
+		classification ? formatCompactReadCall(classification, args, theme) : formatReadCall(args, theme, context.cwd),
+	);
+	return text;
+}
+
+/**
+ * TUI renderer for the read tool result row.
+ * Extracted to module scope so the platform capability can attach it.
+ */
+export function renderReadResult(
+	result: { content: (TextContent | ImageContent)[]; details?: ReadToolDetails },
+	options: ToolRenderResultOptions,
+	theme: Theme,
+	context: ToolRenderContext<unknown, ReadRenderArgs | undefined>,
+): Text {
+	const text = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
+	text.setText(
+		formatReadResult(context.args, result, options, theme, context.showImages, context.cwd, context.isError),
+	);
+	return text;
+}
 
 function formatReadLineRange(args: ReadRenderArgs | undefined, theme: Theme): string {
 	if (args?.offset === undefined && args?.limit === undefined) return "";
@@ -326,23 +359,8 @@ export function createReadToolDefinition(
 				},
 			);
 		},
-		renderCall(args, theme, context) {
-			const text = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
-			const classification = !context.expanded ? getCompactReadClassification(args, context.cwd) : undefined;
-			text.setText(
-				classification
-					? formatCompactReadCall(classification, args, theme)
-					: formatReadCall(args, theme, context.cwd),
-			);
-			return text;
-		},
-		renderResult(result, options, theme, context) {
-			const text = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
-			text.setText(
-				formatReadResult(context.args, result, options, theme, context.showImages, context.cwd, context.isError),
-			);
-			return text;
-		},
+		renderCall: (args, theme, context) => renderReadCall(args, theme, context),
+		renderResult: (result, options, theme, context) => renderReadResult(result, options, theme, context),
 	};
 }
 

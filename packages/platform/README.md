@@ -1,33 +1,42 @@
 # @earendil-works/pi-platform
 
-Capability platform contracts for pi.
+Capability platform contracts + walking-skeleton runtime kernel for pi.
 
-**This package contains ONLY shared contracts:**
+## Contract subpaths (implementation-free)
 
-- interfaces, types, branded identifiers
-- const objects (enum equivalents), TypeBox schemas, constants
-- documentation comments
-
-**Zero runtime behavior.** No registry, no event bus, no dependency injection,
-no capability loading, no migrations. Nothing in the existing codebase depends
-on this package yet.
-
-## Modules
+interfaces, types, branded identifiers, const objects, TypeBox schemas,
+constants, and documentation comments. No runtime behavior.
 
 | Subpath | Contents |
 |---------|----------|
 | `/identifier` | Branded identifiers (CapabilityId, EventId, SessionId, ...) |
-| `/capability` | Capability manifests, lifecycle, context, per-category exports |
-| `/runtime` | Runtime kernel contracts: registry, resolver, loader, discovery, lifecycle |
+| `/capability` | Capability manifests, lifecycle, context, per-category declarations/exports |
+| `/runtime` | Runtime kernel contract interfaces: registry, resolver, loader, discovery, lifecycle |
 | `/service` | Platform service contracts (Settings, Session, FS, Process, Network, Auth, Cache, Events, Permissions, Logging, Configuration, Telemetry) |
 | `/event` | Platform event model + canonical event types |
 | `/error` | Canonical platform error hierarchy |
 | `/schema` | TypeBox schemas for manifests, events, permissions, configuration |
 
+## `/kernel` (runtime behavior — walking skeleton)
+
+The first executable version of the platform runtime: a thin, end-to-end
+implementation that takes one real builtin capability through the complete
+lifecycle (discovery → registration → resolution → loading → initialization →
+exports → shutdown).
+
+- `createRuntime({ builtins })` — boots an uninitialized kernel
+- `KernelRuntime.initialize()/start()/shutdown()`
+- `KernelCapabilityRegistry` — registration, queries, exports, contexts
+- `KernelLifecycleManager` — dependency-aware init, reverse-order shutdown
+- `KernelServiceProvider` — FileSystemService + not-implemented stubs
+- `KernelEventBus` — emit / subscribe / unsubscribe (sync, ordered)
+- `BuiltinCapabilityDiscovery` / `SimpleCapabilityResolver` / `BuiltinCapabilityLoader`
+
 ## Design
 
-See `docs/CAPABILITY_PLATFORM_CONTRACTS.md` in the repo root for the full
-design rationale, contract hierarchy, assumptions, and known limitations.
+See `docs/CAPABILITY_PLATFORM_CONTRACTS.md` (contracts, Step 1.2),
+`docs/RUNTIME_KERNEL_DESIGN.md` (kernel collaboration design, Step 1.3), and
+`docs/RUNTIME_KERNEL_REPORT.md` (Step 1.3 results) in the repo root.
 
 ## Development
 
@@ -35,4 +44,5 @@ design rationale, contract hierarchy, assumptions, and known limitations.
 npm run build   # typecheck + emit declarations
 ```
 
-Checks (from repo root): `tsgo --noEmit`, `biome check packages/platform/src`.
+Checks (from repo root): `tsgo --noEmit`, `biome check packages/platform`,
+`node ../../node_modules/vitest/dist/cli.js --run test/kernel.test.ts`.

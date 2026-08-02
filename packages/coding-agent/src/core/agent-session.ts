@@ -46,6 +46,7 @@ import {
 	streamSimple,
 } from "@earendil-works/pi-ai/compat";
 import { getThemeByName, theme } from "../modes/interactive/theme/theme.ts";
+import { getPlatformReadToolDefinition } from "../platform/platform-runtime.ts";
 import { stripFrontmatter } from "../utils/frontmatter.ts";
 import { resolvePath } from "../utils/paths.ts";
 import { sleep } from "../utils/sleep.ts";
@@ -2564,6 +2565,18 @@ export class AgentSession {
 					read: { autoResizeImages },
 					bash: { commandPrefix: shellCommandPrefix, shellPath },
 				});
+
+		// Platform pilot: source the read definition from the capability registry
+		// when the kernel is booted; otherwise the legacy path above is used as-is.
+		if (!this._baseToolsOverride) {
+			const platformRead = getPlatformReadToolDefinition(this._cwd, {
+				autoResizeImages,
+				sessionId: this.sessionManager.getSessionId(),
+			});
+			if (platformRead) {
+				baseToolDefinitions.read = platformRead;
+			}
+		}
 
 		this._baseToolDefinitions = new Map(
 			Object.entries(baseToolDefinitions).map(([name, tool]) => [name, tool as ToolDefinition]),
