@@ -1,0 +1,73 @@
+{
+  "name": "@earendil-works/pi-platform",
+  "version": "0.83.0",
+  "description": "Capability platform contracts for pi - interfaces, types, and schemas only. Zero runtime behavior.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./capability": {
+      "types": "./dist/capability/index.d.ts",
+      "import": "./dist/capability/index.js"
+    },
+    "./runtime": {
+      "types": "./dist/runtime/index.d.ts",
+      "import": "./dist/runtime/index.js"
+    },
+    "./service": {
+      "types": "./dist/service/index.d.ts",
+      "import": "./dist/service/index.js"
+    },
+    "./event": {
+      "types": "./dist/event/index.d.ts",
+      "import": "./dist/event/index.js"
+    },
+    "./error": {
+      "types": "./dist/error/index.d.ts",
+      "import": "./dist/error/index.js"
+    },
+    "./identifier": {
+      "types": "./dist/identifier/index.d.ts",
+      "import": "./dist/identifier/index.js"
+    },
+    "./schema": {
+      "types": "./dist/schema/index.d.ts",
+      "import": "./dist/schema/index.js"
+    }
+  },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "clean": "shx rm -rf dist",
+    "build": "tsgo -p tsconfig.build.json",
+    "test": "vitest --run"
+  },
+  "dependencies": {
+    "typebox": "1.3.7"
+  },
+  "devDependencies": {
+    "@types/node": "24.12.4",
+    "shx": "0.4.0",
+    "typescript": "5.9.3",
+    "vitest": "4.1.9"
+  },
+  "keywords": [
+    "pi",
+    "platform",
+    "capability",
+    "contracts"
+  ],
+  "author": "Mario Zechner",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/earendil-works/pi.git",
+    "directory": "packages/platform"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  }
+}
