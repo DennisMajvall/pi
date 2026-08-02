@@ -12,6 +12,7 @@ import { KernelLifecycleManager } from "../src/kernel/lifecycle.ts";
 import { KernelCapabilityRegistry } from "../src/kernel/registry.ts";
 import { SimpleCapabilityResolver } from "../src/kernel/resolver.ts";
 import { KernelServiceProvider } from "../src/kernel/service-provider.ts";
+import type { SettingsService } from "../src/service/index.ts";
 
 let runtime: KernelRuntime | undefined;
 
@@ -118,6 +119,30 @@ describe("kernel: walking skeleton pipeline", () => {
 		runtime = await boot([fixtureCapability("tool.fs", [], [], [], true)]);
 		const info = runtime.capabilities.get(capabilityId("tool.fs"));
 		expect(info?.state).toBe(CapabilityState.Ready);
+	});
+
+	it("injects a supplied SettingsService override through the capability context", async () => {
+		const settingsStub: SettingsService = {
+			get: () => undefined,
+			getAll: () => ({}),
+			set: async () => {},
+			registerSchema: () => {},
+			subscribe: () => () => {},
+			subscribeAny: () => () => {},
+			load: async () => {},
+			save: async () => {},
+			reset: async () => {},
+			getSettingsPath: () => "",
+		};
+		runtime = createRuntime({
+			builtins: [fixtureCapability("tool.alpha", [], [], [])],
+			services: { workspaceRoot: "/", settings: settingsStub },
+		});
+		await runtime.initialize();
+		await runtime.start();
+
+		expect(runtime.services.settings).toBe(settingsStub);
+		expect(runtime.capabilities.getContext(capabilityId("tool.alpha"))?.settings).toBe(settingsStub);
 	});
 
 	it("reports missing dependencies without crashing", async () => {

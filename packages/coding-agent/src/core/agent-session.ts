@@ -2572,18 +2572,16 @@ export class AgentSession {
 
 		// Platform pilot: source the read, bash, and grep definitions from the
 		// capability registry when the kernel is booted; otherwise the legacy
-		// path above is used as-is.
+		// path above is used as-is. Settings no longer ride through options:
+		// the capabilities read them from the injected SettingsService.
 		if (!this._baseToolsOverride) {
 			const platformRead = getPlatformReadToolDefinition(this._cwd, {
-				autoResizeImages,
 				sessionId: this.sessionManager.getSessionId(),
 			});
 			if (platformRead) {
 				baseToolDefinitions.read = platformRead;
 			}
 			const platformBash = getPlatformBashToolDefinition(this._cwd, {
-				commandPrefix: shellCommandPrefix,
-				shellPath,
 				sessionId: this.sessionManager.getSessionId(),
 			});
 			if (platformBash) {

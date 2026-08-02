@@ -452,6 +452,11 @@ export class SettingsManager {
 		return structuredClone(this.projectSettings);
 	}
 
+	/** Get the effective (merged global+project+overrides) settings snapshot. */
+	getEffectiveSettings(): Settings {
+		return structuredClone(this.settings);
+	}
+
 	isProjectTrusted(): boolean {
 		return this.projectTrusted;
 	}

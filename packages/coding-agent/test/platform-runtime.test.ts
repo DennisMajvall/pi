@@ -11,14 +11,17 @@ import type { ToolCapabilityExport } from "@earendil-works/pi-platform/capabilit
 import { CapabilityState } from "@earendil-works/pi-platform/capability";
 import { capabilityId, sessionId } from "@earendil-works/pi-platform/identifier";
 import { createRuntime, type KernelRuntime } from "@earendil-works/pi-platform/kernel";
+import type { SettingsService } from "@earendil-works/pi-platform/service";
 import { afterEach, describe, expect, it } from "vitest";
 import type { ExtensionContext } from "../src/core/extensions/types.ts";
+import { SettingsManager } from "../src/core/settings-manager.ts";
 import {
 	ensurePlatformRuntime,
 	getPlatformReadToolDefinition,
 	shutdownPlatformRuntime,
 } from "../src/platform/platform-runtime.ts";
 import { readCapability } from "../src/platform/read-capability.ts";
+import { SettingsManagerService } from "../src/platform/settings-service.ts";
 
 const READ_ID = capabilityId("tool.read");
 
@@ -37,10 +40,13 @@ function writeFixture(dir: string): string {
 	return file;
 }
 
-async function bootReadKernel(): Promise<KernelRuntime> {
+async function bootReadKernel(settings?: SettingsService): Promise<KernelRuntime> {
 	const instance = createRuntime({
 		builtins: [readCapability],
-		services: { workspaceRoot: process.cwd() },
+		services: {
+			workspaceRoot: process.cwd(),
+			settings: settings ?? new SettingsManagerService(SettingsManager.inMemory()),
+		},
 	});
 	await instance.initialize();
 	await instance.start();
@@ -70,6 +76,16 @@ afterEach(async () => {
 	}
 	tempDirs.length = 0;
 });
+
+/** SettingsService spy: records every get path (transport-retirement proof). */
+class RecordingSettingsService extends SettingsManagerService {
+	readonly paths: string[] = [];
+
+	get<T>(path: string, defaultValue?: T): T | undefined {
+		this.paths.push(path);
+		return super.get(path, defaultValue);
+	}
+}
 
 describe("platform read capability: full lifecycle", () => {
 	it("is discovered, registered, resolved, initialized, ready, and shuts down", async () => {
@@ -156,6 +172,33 @@ describe("platform read capability: full lifecycle", () => {
 		);
 		expect(result.success).toBe(false);
 		expect(result.error).toContain("ENOENT");
+	});
+
+	it("reads image auto-resize from the settings service (metadata transport retired)", async () => {
+		const recording = new RecordingSettingsService(SettingsManager.inMemory());
+		kernel = await bootReadKernel(recording);
+		const dir = makeTempDir();
+		const file = writeFixture(dir);
+		const tool = await readToolExport(kernel);
+		const context = await readCapabilityContext(kernel);
+
+		const result = await tool.execute(
+			{ path: file },
+			{
+				capability: context,
+				signal: new AbortController().signal,
+				sessionId: sessionId("test"),
+				cwd: dir,
+				// No settings ride through metadata anymore.
+				metadata: {},
+			},
+		);
+		expect(result.success).toBe(true);
+		const output = result.output as { content: Array<{ type: string; text?: string }> };
+		const text = output.content.map((part) => part.text ?? "").join("");
+		expect(text).toContain("line 1");
+		// The capability read the setting through ctx.settings, not metadata.
+		expect(recording.paths).toContain("images.autoResize");
 	});
 });
 

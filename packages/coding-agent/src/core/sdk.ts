@@ -377,7 +377,9 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 	// Boot the platform runtime (walking skeleton) so AgentSession's synchronous
 	// _buildRuntime can source the read tool definition from capability exports.
 	// Failure-safe: falls back to the legacy read path when the kernel cannot start.
-	await ensurePlatformRuntime();
+	// The session's SettingsManager backs the injected SettingsService so
+	// capabilities read configuration via ctx.settings instead of metadata.
+	await ensurePlatformRuntime({ settingsManager });
 
 	const session = new AgentSession({
 		agent,

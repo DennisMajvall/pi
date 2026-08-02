@@ -17,6 +17,7 @@ import { capabilityId, sessionId } from "@earendil-works/pi-platform/identifier"
 import { createRuntime, type KernelRuntime } from "@earendil-works/pi-platform/kernel";
 import chalk from "chalk";
 import type { ToolDefinition, ToolRenderContext } from "../core/extensions/types.ts";
+import { SettingsManager } from "../core/settings-manager.ts";
 import type { BashToolDetails, BashToolInput } from "../core/tools/bash.ts";
 import { createBashToolDefinition } from "../core/tools/bash.ts";
 import type { GrepToolDetails, GrepToolInput } from "../core/tools/grep.ts";
@@ -26,6 +27,7 @@ import { type ReadToolDetails, type ReadToolInput, renderReadCall, renderReadRes
 import { bashCapability } from "./bash-capability.ts";
 import { grepCapability } from "./grep-capability.ts";
 import { readCapability } from "./read-capability.ts";
+import { SettingsManagerService } from "./settings-service.ts";
 
 const READ_CAPABILITY_ID = capabilityId("tool.read");
 const BASH_CAPABILITY_ID = capabilityId("tool.bash");
@@ -36,20 +38,27 @@ let bootPromise: Promise<KernelRuntime | undefined> | undefined;
 
 /**
  * Boot the platform runtime once per process. Idempotent; failure-safe.
+ * The optional settingsManager backs the injected SettingsService; when
+ * omitted (tests, callers without a manager) an in-memory manager is used.
  */
-export async function ensurePlatformRuntime(): Promise<KernelRuntime | undefined> {
+export async function ensurePlatformRuntime(options: PlatformRuntimeOptions = {}): Promise<KernelRuntime | undefined> {
 	if (runtime) return runtime;
 	if (!bootPromise) {
-		bootPromise = bootPlatformRuntime();
+		bootPromise = bootPlatformRuntime(options);
 	}
 	return bootPromise;
 }
 
-async function bootPlatformRuntime(): Promise<KernelRuntime | undefined> {
+export interface PlatformRuntimeOptions {
+	settingsManager?: SettingsManager;
+}
+
+async function bootPlatformRuntime(options: PlatformRuntimeOptions): Promise<KernelRuntime | undefined> {
 	try {
+		const settings = new SettingsManagerService(options.settingsManager ?? SettingsManager.inMemory());
 		const kernel = createRuntime({
 			builtins: [readCapability, bashCapability, grepCapability],
-			services: { workspaceRoot: process.cwd() },
+			services: { workspaceRoot: process.cwd(), settings },
 		});
 		await kernel.initialize();
 		await kernel.start();
@@ -81,7 +90,6 @@ export async function shutdownPlatformRuntime(): Promise<void> {
 }
 
 export interface PlatformReadOptions {
-	autoResizeImages?: boolean;
 	sessionId?: string;
 }
 
@@ -103,8 +111,6 @@ export function getPlatformReadToolDefinition(
 }
 
 export interface PlatformBashOptions {
-	commandPrefix?: string;
-	shellPath?: string;
 	sessionId?: string;
 }
 
@@ -169,7 +175,6 @@ function buildReadToolDefinition(
 				sessionId: sessionId(options.sessionId ?? "unknown"),
 				cwd,
 				metadata: {
-					autoResizeImages: options.autoResizeImages ?? true,
 					model: extCtx?.model,
 				},
 			});
@@ -218,8 +223,6 @@ function buildBashToolDefinition(
 				sessionId: sessionId(options.sessionId ?? "unknown"),
 				cwd,
 				metadata: {
-					commandPrefix: options.commandPrefix,
-					shellPath: options.shellPath,
 					// The real ExtensionContext + onUpdate ride through metadata so the
 					// re-entered definition keeps session env (PI_*) and live updates.
 					extensionContext: extCtx,

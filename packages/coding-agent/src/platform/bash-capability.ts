@@ -9,8 +9,8 @@
  * Service injection: the exported execute backs the bash tool's pluggable
  * BashOperations with the platform ProcessService (plus FileSystemService for
  * the working-directory existence check) from CapabilityContext. Shell path
- * and command prefix come from the execution metadata (same mechanism as
- * read's autoResizeImages).
+ * and command prefix come from the injected SettingsService (ctx.settings),
+ * not execution metadata.
  */
 
 import type { AgentToolUpdateCallback } from "@earendil-works/pi-agent-core";
@@ -27,6 +27,7 @@ import {
 	createBashToolDefinition,
 	resolveTimeoutMs,
 } from "../core/tools/bash.ts";
+import { normalizePath } from "../utils/paths.ts";
 import { getShellConfig, getShellEnv, trackDetachedChildPid, untrackDetachedChildPid } from "../utils/shell.ts";
 
 const BASH_CAPABILITY_ID = capabilityId("tool.bash");
@@ -49,8 +50,8 @@ export const bashManifest: CapabilityManifest = {
 			promptGuidelines: ["Inspect PI_* environment variables for current model and session details."],
 		},
 	},
-	requires: { services: ["process"], capabilities: [] },
-	permissions: { process: "spawn" },
+	requires: { services: ["process", "settings"], capabilities: [] },
+	permissions: { process: "spawn", config: "read" },
 	compatibility: { runtime: ">=0.83.0", peers: {} },
 	metadata: {
 		name: "Bash Tool",
@@ -65,7 +66,7 @@ export const bashManifest: CapabilityManifest = {
 export const bashCapability: BuiltinCapability = {
 	manifest: bashManifest,
 	factory: async () => ({
-		async init() {
+		async init(ctx) {
 			// Template for definition metadata; the exported execute builds a
 			// fresh definition per execution using the execution cwd and the
 			// injected ProcessService.
@@ -80,8 +81,13 @@ export const bashCapability: BuiltinCapability = {
 					promptGuidelines: template.promptGuidelines,
 				},
 				execute: async (args, toolCtx) => {
-					const commandPrefix = toolCtx.metadata.commandPrefix as string | undefined;
-					const shellPath = toolCtx.metadata.shellPath as string | undefined;
+					// Shell path and command prefix come from the injected
+					// SettingsService (ctx.settings), not execution metadata —
+					// the metadata transport is retired. normalizePath preserves
+					// SettingsManager.getShellPath()'s tilde expansion.
+					const shellPathSetting = ctx.settings.get<string>("shellPath");
+					const shellPath = shellPathSetting ? normalizePath(shellPathSetting) : undefined;
+					const commandPrefix = ctx.settings.get<string>("shellCommandPrefix");
 					const extensionContext = toolCtx.metadata.extensionContext as ExtensionContext | undefined;
 					const onUpdate = toolCtx.metadata.onUpdate as
 						| AgentToolUpdateCallback<BashToolDetails | undefined>

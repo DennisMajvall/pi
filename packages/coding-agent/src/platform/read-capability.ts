@@ -8,6 +8,8 @@
  *
  * Service injection: the exported execute backs the read tool's pluggable
  * ReadOperations with the platform FileSystemService from CapabilityContext.
+ * Image auto-resize comes from the injected SettingsService (ctx.settings),
+ * not execution metadata.
  */
 
 import type { Api, Model } from "@earendil-works/pi-ai";
@@ -37,8 +39,8 @@ export const readManifest: CapabilityManifest = {
 			promptGuidelines: ["Use read to examine files instead of cat or sed."],
 		},
 	},
-	requires: { services: ["fs"], capabilities: [] },
-	permissions: { fs: "read" },
+	requires: { services: ["fs", "settings"], capabilities: [] },
+	permissions: { fs: "read", config: "read" },
 	compatibility: { runtime: ">=0.83.0", peers: {} },
 	metadata: {
 		name: "Read Tool",
@@ -67,8 +69,10 @@ export const readCapability: BuiltinCapability = {
 					promptSnippet: template.promptSnippet,
 					promptGuidelines: template.promptGuidelines,
 				},
+				// Settings come from the injected SettingsService (ctx.settings),
+				// not execution metadata — the metadata transport is retired.
 				execute: async (args, toolCtx) => {
-					const autoResizeImages = (toolCtx.metadata.autoResizeImages as boolean | undefined) ?? true;
+					const autoResizeImages = ctx.settings.get<boolean>("images.autoResize", true) ?? true;
 					const model = toolCtx.metadata.model as Model<Api> | undefined;
 
 					// Back the read tool's pluggable operations with the platform

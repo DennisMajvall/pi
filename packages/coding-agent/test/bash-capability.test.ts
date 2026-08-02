@@ -11,8 +11,10 @@ import type { ToolCapabilityExport } from "@earendil-works/pi-platform/capabilit
 import { CapabilityState } from "@earendil-works/pi-platform/capability";
 import { capabilityId, sessionId } from "@earendil-works/pi-platform/identifier";
 import { createRuntime, type KernelRuntime } from "@earendil-works/pi-platform/kernel";
+import type { SettingsService } from "@earendil-works/pi-platform/service";
 import { afterEach, describe, expect, it } from "vitest";
 import type { ExtensionContext } from "../src/core/extensions/types.ts";
+import { SettingsManager } from "../src/core/settings-manager.ts";
 import { bashCapability } from "../src/platform/bash-capability.ts";
 import {
 	ensurePlatformRuntime,
@@ -20,6 +22,7 @@ import {
 	getPlatformRuntime,
 	shutdownPlatformRuntime,
 } from "../src/platform/platform-runtime.ts";
+import { SettingsManagerService } from "../src/platform/settings-service.ts";
 
 const BASH_ID = capabilityId("tool.bash");
 const READ_ID = capabilityId("tool.read");
@@ -33,10 +36,13 @@ function makeTempDir(): string {
 	return dir;
 }
 
-async function bootBashKernel(): Promise<KernelRuntime> {
+async function bootBashKernel(settings?: SettingsService): Promise<KernelRuntime> {
 	const instance = createRuntime({
 		builtins: [bashCapability],
-		services: { workspaceRoot: process.cwd() },
+		services: {
+			workspaceRoot: process.cwd(),
+			settings: settings ?? new SettingsManagerService(SettingsManager.inMemory()),
+		},
 	});
 	await instance.initialize();
 	await instance.start();
@@ -177,8 +183,9 @@ describe("platform bash capability: full lifecycle", () => {
 		expect(result.error).toContain("Working directory does not exist");
 	});
 
-	it("honors commandPrefix and shellPath from execution metadata", async () => {
-		kernel = await bootBashKernel();
+	it("reads commandPrefix and shellPath from the injected settings service", async () => {
+		const manager = SettingsManager.inMemory({ shellCommandPrefix: "echo prefix-ran" });
+		kernel = await bootBashKernel(new SettingsManagerService(manager));
 		const dir = makeTempDir();
 		const tool = await bashToolExport(kernel);
 		const context = await bashCapabilityContext(kernel);
@@ -190,7 +197,8 @@ describe("platform bash capability: full lifecycle", () => {
 				signal: new AbortController().signal,
 				sessionId: sessionId("test"),
 				cwd: dir,
-				metadata: { commandPrefix: "echo prefix-ran" },
+				// No settings ride through metadata anymore.
+				metadata: {},
 			},
 		);
 		expect(result.success).toBe(true);
@@ -291,13 +299,12 @@ describe("coding-agent consumption adapter", () => {
 		).rejects.toThrow(/code 1/);
 	});
 
-	it("passes shellPath and commandPrefix through to execution", async () => {
-		await ensurePlatformRuntime();
-		const dir = makeTempDir();
-		const definition = getPlatformBashToolDefinition(dir, {
-			commandPrefix: "echo from-prefix",
-			sessionId: "test",
+	it("reads shell settings from the booted runtime's settings service", async () => {
+		await ensurePlatformRuntime({
+			settingsManager: SettingsManager.inMemory({ shellCommandPrefix: "echo from-prefix" }),
 		});
+		const dir = makeTempDir();
+		const definition = getPlatformBashToolDefinition(dir, { sessionId: "test" });
 
 		const result = await definition!.execute(
 			"call-3",
