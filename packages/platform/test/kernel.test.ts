@@ -3,7 +3,7 @@ import type { CapabilityManifest, CapabilityRequires } from "../src/capability/i
 import { CapabilityState } from "../src/capability/index.ts";
 import { PlatformError } from "../src/error/index.ts";
 import type { PlatformEvent } from "../src/event/index.ts";
-import { type CapabilityId, capabilityId, capabilityVersion } from "../src/identifier/index.ts";
+import { type CapabilityId, capabilityId, capabilityVersion, sessionId, workspaceId } from "../src/identifier/index.ts";
 import type { BuiltinCapability } from "../src/kernel/discovery.ts";
 import { KernelEventBus } from "../src/kernel/event-bus.ts";
 import { EVENT_READY, EVENT_SHUTDOWN } from "../src/kernel/events.ts";
@@ -12,7 +12,7 @@ import { KernelLifecycleManager } from "../src/kernel/lifecycle.ts";
 import { KernelCapabilityRegistry } from "../src/kernel/registry.ts";
 import { SimpleCapabilityResolver } from "../src/kernel/resolver.ts";
 import { KernelServiceProvider } from "../src/kernel/service-provider.ts";
-import type { SettingsService } from "../src/service/index.ts";
+import type { Session, SessionService, SettingsService } from "../src/service/index.ts";
 
 let runtime: KernelRuntime | undefined;
 
@@ -145,6 +145,39 @@ describe("kernel: walking skeleton pipeline", () => {
 		expect(runtime.capabilities.getContext(capabilityId("tool.alpha"))?.settings).toBe(settingsStub);
 	});
 
+	it("injects a supplied SessionService override through the capability context", async () => {
+		const stubSession: Session = {
+			id: sessionId("stub"),
+			workspaceId: workspaceId("stub"),
+			cwd: "/",
+			createdAt: 0,
+			updatedAt: 0,
+			append: async () => {},
+			getEntries: async () => [],
+			getHeader: () => ({ version: 1, id: sessionId("stub"), cwd: "/", createdAt: 0 }),
+			updateInfo: async () => {},
+			close: async () => {},
+		};
+		const sessionStub: SessionService = {
+			create: async () => stubSession,
+			open: async () => stubSession,
+			fork: async () => stubSession,
+			list: async () => [],
+			delete: async () => {},
+			export: async () => ({ content: "", mimeType: "", filename: "" }),
+			import: async () => stubSession,
+		};
+		runtime = createRuntime({
+			builtins: [fixtureCapability("tool.alpha", [], [], [])],
+			services: { workspaceRoot: "/", session: sessionStub },
+		});
+		await runtime.initialize();
+		await runtime.start();
+
+		expect(runtime.services.session).toBe(sessionStub);
+		expect(runtime.capabilities.getContext(capabilityId("tool.alpha"))?.session).toBe(sessionStub);
+	});
+
 	it("reports missing dependencies without crashing", async () => {
 		runtime = await boot([fixtureCapability("tool.orphan", [capabilityId("tool.ghost")], [], [])]);
 		expect(runtime.capabilities.get(capabilityId("tool.orphan"))?.state).toBe(CapabilityState.Ready);
@@ -169,6 +202,9 @@ describe("kernel: walking skeleton pipeline", () => {
 		const instance = await boot([fixtureCapability("tool.alpha", [], [], [])]);
 		runtime = instance;
 		expect(() => instance.services.settings.get("anything")).toThrow(PlatformError);
+		expect(() => instance.services.session.create({ workspaceId: workspaceId("ws"), cwd: "/" })).toThrow(
+			PlatformError,
+		);
 	});
 
 	it("detects dependency cycles via the resolver", async () => {

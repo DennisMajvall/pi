@@ -53,6 +53,8 @@ export interface KernelServiceProviderOptions {
 	events?: EventBusService;
 	/** SettingsService implementation. Defaults to a not-implemented stub. */
 	settings?: SettingsService;
+	/** SessionService implementation. Defaults to a not-implemented stub. */
+	session?: SessionService;
 	/** Workspace root for the default FileSystemService. Defaults to process.cwd(). */
 	workspaceRoot?: string;
 }
@@ -76,7 +78,7 @@ export class KernelServiceProvider implements ServiceProvider {
 		this.process = options.process ?? new NodeProcessService();
 		this.events = options.events ?? (notImplementedService("events") as EventBusService);
 		this.settings = options.settings ?? (notImplementedService("settings") as SettingsService);
-		this.session = notImplementedService("session") as SessionService;
+		this.session = options.session ?? (notImplementedService("session") as SessionService);
 		this.network = notImplementedService("network") as NetworkService;
 		this.auth = notImplementedService("auth") as AuthService;
 		this.cache = notImplementedService("cache") as CacheService;

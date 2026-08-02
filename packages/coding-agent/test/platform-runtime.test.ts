@@ -14,13 +14,16 @@ import { createRuntime, type KernelRuntime } from "@earendil-works/pi-platform/k
 import type { SettingsService } from "@earendil-works/pi-platform/service";
 import { afterEach, describe, expect, it } from "vitest";
 import type { ExtensionContext } from "../src/core/extensions/types.ts";
+import { SessionManager } from "../src/core/session-manager.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
 import {
 	ensurePlatformRuntime,
 	getPlatformReadToolDefinition,
+	getPlatformRuntime,
 	shutdownPlatformRuntime,
 } from "../src/platform/platform-runtime.ts";
 import { readCapability } from "../src/platform/read-capability.ts";
+import type { SessionManagerService } from "../src/platform/session-service.ts";
 import { SettingsManagerService } from "../src/platform/settings-service.ts";
 
 const READ_ID = capabilityId("tool.read");
@@ -225,5 +228,16 @@ describe("coding-agent consumption adapter", () => {
 		);
 		const text = (result.content as Array<{ type: string; text?: string }>).map((p) => p.text ?? "").join("");
 		expect(text).toContain("line 1");
+	});
+
+	it("binds the booted session service to the supplied session manager", async () => {
+		const manager = SessionManager.inMemory();
+		await ensurePlatformRuntime({ sessionManager: manager });
+		const kernel = getPlatformRuntime();
+		expect(kernel).toBeDefined();
+		if (!kernel) return;
+
+		const sessionService = kernel.services.session as SessionManagerService;
+		expect(sessionService.getBootSession().id).toBe(sessionId(manager.getSessionId()));
 	});
 });

@@ -17,6 +17,7 @@ import { capabilityId, sessionId } from "@earendil-works/pi-platform/identifier"
 import { createRuntime, type KernelRuntime } from "@earendil-works/pi-platform/kernel";
 import chalk from "chalk";
 import type { ToolDefinition, ToolRenderContext } from "../core/extensions/types.ts";
+import { SessionManager } from "../core/session-manager.ts";
 import { SettingsManager } from "../core/settings-manager.ts";
 import type { BashToolDetails, BashToolInput } from "../core/tools/bash.ts";
 import { createBashToolDefinition } from "../core/tools/bash.ts";
@@ -27,6 +28,7 @@ import { type ReadToolDetails, type ReadToolInput, renderReadCall, renderReadRes
 import { bashCapability } from "./bash-capability.ts";
 import { grepCapability } from "./grep-capability.ts";
 import { readCapability } from "./read-capability.ts";
+import { SessionManagerService } from "./session-service.ts";
 import { SettingsManagerService } from "./settings-service.ts";
 
 const READ_CAPABILITY_ID = capabilityId("tool.read");
@@ -38,8 +40,9 @@ let bootPromise: Promise<KernelRuntime | undefined> | undefined;
 
 /**
  * Boot the platform runtime once per process. Idempotent; failure-safe.
- * The optional settingsManager backs the injected SettingsService; when
- * omitted (tests, callers without a manager) an in-memory manager is used.
+ * The optional settingsManager backs the injected SettingsService and the
+ * optional sessionManager backs the injected SessionService; when omitted
+ * (tests, callers without a manager) in-memory managers are used.
  */
 export async function ensurePlatformRuntime(options: PlatformRuntimeOptions = {}): Promise<KernelRuntime | undefined> {
 	if (runtime) return runtime;
@@ -51,14 +54,16 @@ export async function ensurePlatformRuntime(options: PlatformRuntimeOptions = {}
 
 export interface PlatformRuntimeOptions {
 	settingsManager?: SettingsManager;
+	sessionManager?: SessionManager;
 }
 
 async function bootPlatformRuntime(options: PlatformRuntimeOptions): Promise<KernelRuntime | undefined> {
 	try {
 		const settings = new SettingsManagerService(options.settingsManager ?? SettingsManager.inMemory());
+		const session = new SessionManagerService(options.sessionManager ?? SessionManager.inMemory());
 		const kernel = createRuntime({
 			builtins: [readCapability, bashCapability, grepCapability],
-			services: { workspaceRoot: process.cwd(), settings },
+			services: { workspaceRoot: process.cwd(), settings, session },
 		});
 		await kernel.initialize();
 		await kernel.start();

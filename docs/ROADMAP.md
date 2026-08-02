@@ -18,7 +18,7 @@ Workers → **Memory** (features-to-implement #4)
 - [x] Step 1.4 — bash tool + ProcessService
 - [x] Step 1.5 — grep tool + first peer-capability dependency
 - [x] Step 1.6 — SettingsService
-- [ ] Step 1.7 — SessionService
+- [x] Step 1.7 — SessionService
 - [ ] Step 1.8 — find/ls + grep search seam (read-only tool set complete)
 - [ ] Step 1.9 — Remaining platform pieces (decided step by step; candidates:
       write/edit migration, permission enforcement, event replay)
@@ -48,9 +48,13 @@ Workers → **Memory** (features-to-implement #4)
 
 ## Notes
 
+- Current position: Step 1.7 (SessionService extraction) is complete — the
+  read-only pilots' services (fs/process/settings/session) are all real, and
+  the stub surface is down to network/auth/cache/permissions/logging/
+  configuration/telemetry. Next: Step 1.8 (find/ls + grep search seam).
 - Step cadence: one capability or service per step. Every step's report ends
   with a "Recommended Next Step" section that picks the next cheapest
-  validation, grounded in the design docs — this is how steps 1.3–1.6 were
+  validation, grounded in the design docs — this is how steps 1.3–1.7 were
   chosen (each report named the next one in advance), not improvised.
 - Sub-steps between features are not pre-planned; they are decided when a
   feature starts (the platform steps 1.7–1.10 above are the current view and
