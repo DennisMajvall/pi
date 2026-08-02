@@ -1,9 +1,10 @@
 /**
  * Walking-skeleton ServiceProvider.
  *
- * Owns service instances. Only FileSystemService is implemented for the pilot;
- * all other services are stubs that throw "not implemented" when used. This
- * matches the Step 1.3 constraint: expose only the services the pilot requires.
+ * Owns service instances. FileSystemService and ProcessService are
+ * implemented for the pilot; all other services are stubs that throw
+ * "not implemented" when used. This matches the Step 1.3/1.4 constraint:
+ * expose only the services the pilots require.
  */
 
 import { PlatformError } from "../error/index.ts";
@@ -23,6 +24,7 @@ import type {
 	TelemetryService,
 } from "../service/index.ts";
 import { NodeFileSystemService } from "./fs-service.ts";
+import { NodeProcessService } from "./process-service.ts";
 
 /** A stub service whose every method throws "not implemented". */
 function notImplementedService(name: string): object {
@@ -45,6 +47,8 @@ function notImplementedService(name: string): object {
 export interface KernelServiceProviderOptions {
 	/** FileSystemService implementation. Defaults to a node:fs wrapper over the given root. */
 	fs?: FileSystemService;
+	/** ProcessService implementation. Defaults to a node:child_process wrapper. */
+	process?: ProcessService;
 	/** Event bus implementation (shared with the runtime). Defaults to a not-implemented stub. */
 	events?: EventBusService;
 	/** Workspace root for the default FileSystemService. Defaults to process.cwd(). */
@@ -67,10 +71,10 @@ export class KernelServiceProvider implements ServiceProvider {
 
 	constructor(options: KernelServiceProviderOptions = {}) {
 		this.fs = options.fs ?? new NodeFileSystemService(options.workspaceRoot ?? process.cwd());
+		this.process = options.process ?? new NodeProcessService();
 		this.events = options.events ?? (notImplementedService("events") as EventBusService);
 		this.settings = notImplementedService("settings") as SettingsService;
 		this.session = notImplementedService("session") as SessionService;
-		this.process = notImplementedService("process") as ProcessService;
 		this.network = notImplementedService("network") as NetworkService;
 		this.auth = notImplementedService("auth") as AuthService;
 		this.cache = notImplementedService("cache") as CacheService;

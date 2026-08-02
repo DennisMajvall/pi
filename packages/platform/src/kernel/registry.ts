@@ -10,6 +10,7 @@
  * stored CapabilityContext so consumers can build execution contexts.
  */
 
+import { Value } from "typebox/value";
 import type {
 	CapabilityCategory,
 	CapabilityContext,
@@ -29,6 +30,7 @@ import type {
 	CapabilityRegistry,
 	RegistryListener,
 } from "../runtime/index.ts";
+import { CapabilityManifestSchema } from "../schema/index.ts";
 import type { EventBusService } from "../service/index.ts";
 import { registeredEvent, unregisteredEvent } from "./events.ts";
 
@@ -73,10 +75,18 @@ export class KernelCapabilityRegistry implements KernelRegistry {
 	}
 
 	async register(manifest: CapabilityManifest, loader: CapabilityLoader): Promise<CapabilityRegistration> {
-		if (typeof manifest.id !== "string" || typeof manifest.version !== "string") {
-			throw new PlatformError("Capability manifest requires string id and version", {
+		// Full schema validation at registration time: manifests that do not
+		// conform to CapabilityManifestSchema are rejected with the TypeBox
+		// error details instead of being registered.
+		try {
+			Value.Parse(CapabilityManifestSchema, manifest);
+		} catch (error) {
+			throw new PlatformError("Capability manifest failed schema validation", {
 				code: "VALIDATION_ERROR",
-				metadata: { manifestId: manifest.id },
+				metadata: {
+					manifestId: manifest.id,
+					details: error instanceof Error ? error.message : String(error),
+				},
 			});
 		}
 		if (this.entries.has(manifest.id)) {

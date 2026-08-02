@@ -5,9 +5,11 @@ export {
 	type BashToolDetails,
 	type BashToolInput,
 	type BashToolOptions,
+	bashSchema,
 	createBashTool,
 	createBashToolDefinition,
 	createLocalBashOperations,
+	resolveTimeoutMs,
 } from "./bash.ts";
 export {
 	createEditTool,

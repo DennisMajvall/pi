@@ -14,7 +14,7 @@
  * - SimpleCapabilityResolver (dependency existence + initialization order)
  * - BuiltinCapabilityLoader (factory loading)
  * - KernelLifecycleManager (dependency-aware init, reverse-order shutdown)
- * - KernelServiceProvider (FileSystemService + not-implemented stubs)
+ * - KernelServiceProvider (FileSystemService + ProcessService + not-implemented stubs)
  * - KernelEventBus (emit / subscribe / unsubscribe)
  */
 
@@ -40,6 +40,7 @@ export {
 	type KernelLifecycleManagerOptions,
 } from "./lifecycle.ts";
 export { BuiltinCapabilityLoader } from "./loader.ts";
+export { NodeProcessService } from "./process-service.ts";
 export {
 	KernelCapabilityRegistry,
 	type KernelRegistry,

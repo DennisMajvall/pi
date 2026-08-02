@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import type { CapabilityManifest } from "../src/capability/index.ts";
+import type { CapabilityManifest, CapabilityRequires } from "../src/capability/index.ts";
 import { CapabilityState } from "../src/capability/index.ts";
 import { PlatformError } from "../src/error/index.ts";
 import type { PlatformEvent } from "../src/event/index.ts";
@@ -236,5 +236,41 @@ describe("kernel: registry queries", () => {
 		expect(instance.capabilities.getByCategory("tool")).toHaveLength(1);
 		expect(instance.capabilities.find({ provides: "tool" })).toHaveLength(1);
 		expect(instance.capabilities.find({ state: CapabilityState.Ready })).toHaveLength(1);
+	});
+});
+
+describe("kernel: manifest schema validation", () => {
+	async function registerManifest(manifest: CapabilityManifest): Promise<unknown> {
+		const bus = new KernelEventBus();
+		const registry = new KernelCapabilityRegistry(bus);
+		return registry.register(manifest, { load: async () => ({ init: async () => ({}) }) });
+	}
+
+	it("accepts schema-conformant manifests at registration", async () => {
+		await expect(registerManifest(manifest("tool.valid"))).resolves.toBeDefined();
+	});
+
+	it("rejects a manifest with an invalid capability id", async () => {
+		const bad = manifest("tool.valid");
+		bad.id = "not-an-id" as CapabilityId;
+		await expect(registerManifest(bad)).rejects.toThrow(/validation/i);
+	});
+
+	it("rejects a manifest with an unknown required service", async () => {
+		const bad = manifest("tool.valid");
+		bad.requires.services = ["ghost-service" as CapabilityRequires["services"][number]];
+		await expect(registerManifest(bad)).rejects.toThrow(/validation/i);
+	});
+
+	it("rejects a manifest missing required metadata fields", async () => {
+		const bad = manifest("tool.valid");
+		bad.metadata = { name: "x" } as CapabilityManifest["metadata"];
+		await expect(registerManifest(bad)).rejects.toThrow(/validation/i);
+	});
+
+	it("rejects a manifest with an invalid permission level", async () => {
+		const bad = manifest("tool.valid");
+		bad.permissions = { process: "teleport" } as unknown as CapabilityManifest["permissions"];
+		await expect(registerManifest(bad)).rejects.toThrow(/validation/i);
 	});
 });

@@ -24,7 +24,7 @@ import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, formatSize, type TruncationResult
 const MAX_TIMEOUT_MS = 2_147_483_647;
 const MAX_TIMEOUT_SECONDS = MAX_TIMEOUT_MS / 1000;
 
-function resolveTimeoutMs(timeout: number | undefined): number | undefined {
+export function resolveTimeoutMs(timeout: number | undefined): number | undefined {
 	if (timeout === undefined) return undefined;
 	if (!Number.isFinite(timeout) || timeout <= 0) {
 		throw new Error("Invalid timeout: must be a finite number of seconds");
@@ -42,6 +42,7 @@ const bashSchema = Type.Object({
 	timeout: Type.Optional(Type.Number({ description: "Timeout in seconds (optional, no default timeout)" })),
 });
 
+export { bashSchema };
 export type BashToolInput = Static<typeof bashSchema>;
 
 export interface BashToolDetails {

@@ -46,7 +46,7 @@ import {
 	streamSimple,
 } from "@earendil-works/pi-ai/compat";
 import { getThemeByName, theme } from "../modes/interactive/theme/theme.ts";
-import { getPlatformReadToolDefinition } from "../platform/platform-runtime.ts";
+import { getPlatformBashToolDefinition, getPlatformReadToolDefinition } from "../platform/platform-runtime.ts";
 import { stripFrontmatter } from "../utils/frontmatter.ts";
 import { resolvePath } from "../utils/paths.ts";
 import { sleep } from "../utils/sleep.ts";
@@ -2566,8 +2566,9 @@ export class AgentSession {
 					bash: { commandPrefix: shellCommandPrefix, shellPath },
 				});
 
-		// Platform pilot: source the read definition from the capability registry
-		// when the kernel is booted; otherwise the legacy path above is used as-is.
+		// Platform pilot: source the read and bash definitions from the capability
+		// registry when the kernel is booted; otherwise the legacy path above is
+		// used as-is.
 		if (!this._baseToolsOverride) {
 			const platformRead = getPlatformReadToolDefinition(this._cwd, {
 				autoResizeImages,
@@ -2575,6 +2576,14 @@ export class AgentSession {
 			});
 			if (platformRead) {
 				baseToolDefinitions.read = platformRead;
+			}
+			const platformBash = getPlatformBashToolDefinition(this._cwd, {
+				commandPrefix: shellCommandPrefix,
+				shellPath,
+				sessionId: this.sessionManager.getSessionId(),
+			});
+			if (platformBash) {
+				baseToolDefinitions.bash = platformBash;
 			}
 		}
 
