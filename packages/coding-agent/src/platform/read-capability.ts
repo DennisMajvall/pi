@@ -53,7 +53,7 @@ export const readManifest: CapabilityManifest = {
 export const readCapability: BuiltinCapability = {
 	manifest: readManifest,
 	factory: async () => ({
-		async init() {
+		async init(ctx) {
 			// Template for definition metadata; the exported execute builds a
 			// fresh definition per execution using the execution cwd and the
 			// injected FileSystemService.
@@ -104,7 +104,16 @@ export const readCapability: BuiltinCapability = {
 				},
 			};
 
-			return { tool };
+			// Additive export for peer consumption: the grep capability reads
+			// full file contents for context lines via this primitive. The read
+			// tool's execute applies truncation, so grep must not route through
+			// it. CapabilityExports is arbitrary, so this is not a contract
+			// change; existing consumers read only exports.tool.
+			const readTextFile = async (absolutePath: string): Promise<string> => {
+				return Buffer.from(await ctx.fs.readBytes(absolutePath)).toString("utf-8");
+			};
+
+			return { tool, readTextFile };
 		},
 		async shutdown() {
 			// Nothing to release in the pilot.

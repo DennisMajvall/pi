@@ -2,12 +2,13 @@
  * Coding-agent platform runtime wiring.
  *
  * Boots the walking-skeleton kernel as a process-level singleton with the
- * read and bash pilot capabilities, and adapts their exports into the
+ * read, bash, and grep pilot capabilities, and adapts their exports into the
  * coding-agent tool definitions used by AgentSession.
  *
  * Failure-safe: if the kernel cannot start, `getPlatformReadToolDefinition` /
- * `getPlatformBashToolDefinition` return undefined and AgentSession falls
- * back to the legacy paths, so existing behaviour never changes.
+ * `getPlatformBashToolDefinition` / `getPlatformGrepToolDefinition` return
+ * undefined and AgentSession falls back to the legacy paths, so existing
+ * behaviour never changes.
  */
 
 import type { AgentToolResult } from "@earendil-works/pi-agent-core";
@@ -18,13 +19,17 @@ import chalk from "chalk";
 import type { ToolDefinition, ToolRenderContext } from "../core/extensions/types.ts";
 import type { BashToolDetails, BashToolInput } from "../core/tools/bash.ts";
 import { createBashToolDefinition } from "../core/tools/bash.ts";
+import type { GrepToolDetails, GrepToolInput } from "../core/tools/grep.ts";
+import { createGrepToolDefinition } from "../core/tools/grep.ts";
 import type { ReadRenderArgs } from "../core/tools/read.ts";
 import { type ReadToolDetails, type ReadToolInput, renderReadCall, renderReadResult } from "../core/tools/read.ts";
 import { bashCapability } from "./bash-capability.ts";
+import { grepCapability } from "./grep-capability.ts";
 import { readCapability } from "./read-capability.ts";
 
 const READ_CAPABILITY_ID = capabilityId("tool.read");
 const BASH_CAPABILITY_ID = capabilityId("tool.bash");
+const GREP_CAPABILITY_ID = capabilityId("tool.grep");
 
 let runtime: KernelRuntime | undefined;
 let bootPromise: Promise<KernelRuntime | undefined> | undefined;
@@ -43,7 +48,7 @@ export async function ensurePlatformRuntime(): Promise<KernelRuntime | undefined
 async function bootPlatformRuntime(): Promise<KernelRuntime | undefined> {
 	try {
 		const kernel = createRuntime({
-			builtins: [readCapability, bashCapability],
+			builtins: [readCapability, bashCapability, grepCapability],
 			services: { workspaceRoot: process.cwd() },
 		});
 		await kernel.initialize();
@@ -118,6 +123,27 @@ export function getPlatformBashToolDefinition(
 	const context = kernel.capabilities.getContext(BASH_CAPABILITY_ID);
 	if (!tool || !context) return undefined;
 	return buildBashToolDefinition(tool, context, cwd, options);
+}
+
+export interface PlatformGrepOptions {
+	sessionId?: string;
+}
+
+/**
+ * Build the AgentSession grep ToolDefinition from the platform registry
+ * exports. Returns undefined when the kernel is not available, in which case
+ * callers fall back to the legacy definition.
+ */
+export function getPlatformGrepToolDefinition(
+	cwd: string,
+	options: PlatformGrepOptions = {},
+): ToolDefinition | undefined {
+	const kernel = getPlatformRuntime();
+	if (!kernel) return undefined;
+	const tool = kernel.capabilities.getExports<{ tool: ToolCapabilityExport }>(GREP_CAPABILITY_ID)?.tool;
+	const context = kernel.capabilities.getContext(GREP_CAPABILITY_ID);
+	if (!tool || !context) return undefined;
+	return buildGrepToolDefinition(tool, context, cwd, options);
 }
 
 // The adapter boundary sits between two contract systems (platform tool export
@@ -204,6 +230,41 @@ function buildBashToolDefinition(
 				throw new Error(result.error ?? "bash failed");
 			}
 			return result.output as unknown as AgentToolResult<BashToolDetails | undefined>;
+		},
+		renderCall: template.renderCall as unknown as ToolDefinition<any, any>["renderCall"],
+		renderResult: template.renderResult as unknown as ToolDefinition<any, any>["renderResult"],
+	};
+}
+
+// The grep tool's renderers are object methods on the definition (never
+// extracted as module functions like read's); a template definition supplies
+// them to the platform-built definition without touching grep.ts.
+function buildGrepToolDefinition(
+	tool: ToolCapabilityExport,
+	context: CapabilityContext,
+	cwd: string,
+	options: PlatformGrepOptions,
+): ToolDefinition<any, any> {
+	const template = createGrepToolDefinition("");
+	return {
+		name: tool.definition.name,
+		label: "grep",
+		description: tool.definition.description,
+		promptSnippet: tool.definition.promptSnippet,
+		promptGuidelines: tool.definition.promptGuidelines,
+		parameters: tool.definition.parameters,
+		execute: async (_toolCallId, params, signal, _onUpdate, _extCtx) => {
+			const result = await tool.execute(params as GrepToolInput, {
+				capability: context,
+				signal: signal ?? new AbortController().signal,
+				sessionId: sessionId(options.sessionId ?? "unknown"),
+				cwd,
+				metadata: {},
+			});
+			if (!result.success) {
+				throw new Error(result.error ?? "grep failed");
+			}
+			return result.output as unknown as AgentToolResult<GrepToolDetails | undefined>;
 		},
 		renderCall: template.renderCall as unknown as ToolDefinition<any, any>["renderCall"],
 		renderResult: template.renderResult as unknown as ToolDefinition<any, any>["renderResult"],
