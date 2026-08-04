@@ -23,6 +23,11 @@ import { executePlatformTool } from "./tool-execution.ts";
 
 const READ_CAPABILITY_ID = capabilityId("tool.read");
 
+// One template per capability (Step 1.10): the manifest's provides.tool prose
+// is sourced from it so the two can never drift apart. init reuses the same
+// template for the export definition.
+const toolTemplate = createReadToolDefinition("");
+
 /**
  * Static manifest. Discovery and registration need only this — no implementation.
  */
@@ -34,10 +39,10 @@ export const readManifest: CapabilityManifest = {
 	provides: {
 		tool: {
 			name: "read",
-			description: "Read the contents of a file. Supports text files and images.",
+			description: toolTemplate.description,
 			parameters: readSchema,
-			promptSnippet: "Read file contents",
-			promptGuidelines: ["Use read to examine files instead of cat or sed."],
+			promptSnippet: toolTemplate.promptSnippet,
+			promptGuidelines: toolTemplate.promptGuidelines,
 		},
 	},
 	requires: { services: ["fs", "settings"], capabilities: [] },
@@ -60,7 +65,7 @@ export const readCapability: BuiltinCapability = {
 			// Template for definition metadata; the exported execute builds a
 			// fresh definition per execution using the execution cwd and the
 			// injected FileSystemService.
-			const template = createReadToolDefinition("");
+			const template = toolTemplate;
 
 			const tool: ToolCapabilityExport = {
 				definition: {

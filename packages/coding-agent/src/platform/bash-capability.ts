@@ -33,6 +33,11 @@ import { executePlatformTool } from "./tool-execution.ts";
 
 const BASH_CAPABILITY_ID = capabilityId("tool.bash");
 
+// One template per capability (Step 1.10): the manifest's provides.tool prose
+// is sourced from it so the two can never drift apart. init reuses the same
+// template for the export definition.
+const toolTemplate = createBashToolDefinition("");
+
 /**
  * Static manifest. Discovery and registration need only this — no implementation.
  */
@@ -44,11 +49,10 @@ export const bashManifest: CapabilityManifest = {
 	provides: {
 		tool: {
 			name: "bash",
-			description:
-				"Execute a bash command in the current working directory. Returns stdout and stderr. Output is truncated to last 2000 lines or 50KB (whichever is hit first). If truncated, full output is saved to a temp file. Optionally provide a timeout in seconds.",
+			description: toolTemplate.description,
 			parameters: bashSchema,
-			promptSnippet: "Execute bash commands (ls, grep, find, etc.)",
-			promptGuidelines: ["Inspect PI_* environment variables for current model and session details."],
+			promptSnippet: toolTemplate.promptSnippet,
+			promptGuidelines: toolTemplate.promptGuidelines,
 		},
 	},
 	requires: { services: ["process", "settings"], capabilities: [] },
@@ -71,7 +75,7 @@ export const bashCapability: BuiltinCapability = {
 			// Template for definition metadata; the exported execute builds a
 			// fresh definition per execution using the execution cwd and the
 			// injected ProcessService.
-			const template = createBashToolDefinition("");
+			const template = toolTemplate;
 
 			const tool: ToolCapabilityExport = {
 				definition: {

@@ -30,6 +30,11 @@ import { executePlatformTool } from "./tool-execution.ts";
 
 const EDIT_CAPABILITY_ID = capabilityId("tool.edit");
 
+// One template per capability (Step 1.10): the manifest's provides.tool prose
+// is sourced from it so the two can never drift apart. init reuses the same
+// template for the export definition.
+const toolTemplate = createEditToolDefinition("");
+
 /**
  * Static manifest. Discovery and registration need only this — no implementation.
  */
@@ -41,11 +46,10 @@ export const editManifest: CapabilityManifest = {
 	provides: {
 		tool: {
 			name: "edit",
-			description:
-				"Edit a single file using exact text replacement. Every edits[].oldText must match a unique, non-overlapping region of the original file. If two changes affect the same block or nearby lines, merge them into one edit instead of emitting overlapping edits. Do not include large unchanged regions just to connect distant changes.",
+			description: toolTemplate.description,
 			parameters: editSchema,
-			promptSnippet:
-				"Make precise file edits with exact text replacement, including multiple disjoint edits in one call",
+			promptSnippet: toolTemplate.promptSnippet,
+			promptGuidelines: toolTemplate.promptGuidelines,
 		},
 	},
 	requires: { services: ["fs"], capabilities: [] },
@@ -68,7 +72,7 @@ export const editCapability: BuiltinCapability = {
 			// Template for definition metadata; the exported execute builds a
 			// fresh definition per execution using the execution cwd and the
 			// injected FileSystemService.
-			const template = createEditToolDefinition("");
+			const template = toolTemplate;
 
 			const tool: ToolCapabilityExport = {
 				definition: {

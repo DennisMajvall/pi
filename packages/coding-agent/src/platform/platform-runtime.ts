@@ -2,37 +2,37 @@
  * Coding-agent platform runtime wiring.
  *
  * Boots the walking-skeleton kernel as a process-level singleton with the
- * read, bash, grep, find, and ls pilot capabilities, and adapts their exports
- * into the coding-agent tool definitions used by AgentSession.
+ * read, bash, grep, find, ls, write, and edit builtin capabilities, and
+ * adapts their exports into the coding-agent tool definitions used by
+ * AgentSession.
  *
- * Failure-safe: if the kernel cannot start,
- * `getPlatformReadToolDefinition` / `getPlatformBashToolDefinition` /
- * `getPlatformGrepToolDefinition` / `getPlatformFindToolDefinition` /
- * `getPlatformLsToolDefinition` return undefined and AgentSession falls back
- * to the legacy paths, so existing behaviour never changes.
+ * Step 1.10 gate: the platform is the DEFAULT execution path for the builtin
+ * tools. `getPlatformAllToolDefinitions` returns the full seven-tool set when
+ * the kernel is booted and every tool export is available, and `_buildRuntime`
+ * consumes that set atomically through `resolveBaseToolDefinitions` — all
+ * seven tools come from the platform, or all seven fall back to the legacy
+ * definitions. No mixed platform/legacy session state is possible.
+ *
+ * Failure-safe: if the kernel cannot start (or a tool export is missing), the
+ * set is undefined and AgentSession falls back to the legacy paths wholesale,
+ * with a warning — a kernel failure never fails a session.
  */
 
-import type { AgentToolResult } from "@earendil-works/pi-agent-core";
+import type { AgentToolResult, AgentToolUpdateCallback } from "@earendil-works/pi-agent-core";
 import type { CapabilityContext, ToolCapabilityExport } from "@earendil-works/pi-platform/capability";
-import { capabilityId, sessionId } from "@earendil-works/pi-platform/identifier";
+import { type CapabilityId, capabilityId, sessionId } from "@earendil-works/pi-platform/identifier";
 import { createRuntime, type KernelRuntime } from "@earendil-works/pi-platform/kernel";
 import chalk from "chalk";
-import type { ToolDefinition, ToolRenderContext } from "../core/extensions/types.ts";
+import type { ExtensionContext, ToolDefinition } from "../core/extensions/types.ts";
 import { SessionManager } from "../core/session-manager.ts";
 import { SettingsManager } from "../core/settings-manager.ts";
-import type { BashToolDetails, BashToolInput } from "../core/tools/bash.ts";
 import { createBashToolDefinition } from "../core/tools/bash.ts";
-import type { EditToolDetails, EditToolInput } from "../core/tools/edit.ts";
 import { createEditToolDefinition } from "../core/tools/edit.ts";
-import type { FindToolDetails, FindToolInput } from "../core/tools/find.ts";
 import { createFindToolDefinition } from "../core/tools/find.ts";
-import type { GrepToolDetails, GrepToolInput } from "../core/tools/grep.ts";
 import { createGrepToolDefinition } from "../core/tools/grep.ts";
-import type { LsToolDetails, LsToolInput } from "../core/tools/ls.ts";
+import type { ToolDef, ToolName } from "../core/tools/index.ts";
 import { createLsToolDefinition } from "../core/tools/ls.ts";
-import type { ReadRenderArgs } from "../core/tools/read.ts";
-import { type ReadToolDetails, type ReadToolInput, renderReadCall, renderReadResult } from "../core/tools/read.ts";
-import type { WriteToolInput } from "../core/tools/write.ts";
+import { createReadToolDefinition } from "../core/tools/read.ts";
 import { createWriteToolDefinition } from "../core/tools/write.ts";
 import { bashCapability } from "./bash-capability.ts";
 import { editCapability } from "./edit-capability.ts";
@@ -119,411 +119,264 @@ export async function shutdownPlatformRuntime(): Promise<void> {
 	bootPromise = undefined;
 }
 
-export interface PlatformReadOptions {
+export interface PlatformToolSetOptions {
 	sessionId?: string;
 }
 
 /**
- * Build the AgentSession read ToolDefinition from the platform registry
- * exports. Returns undefined when the kernel is not available, in which case
- * callers fall back to the legacy definition.
+ * Per-tool adapter spec: the only per-tool variation left after the Step 1.10
+ * dedup. One template per tool supplies the renderers (all seven define
+ * renderCall/renderResult as object members) and, for edit, the
+ * prepareArguments compatibility shim and `renderShell: "self"` framing.
+ */
+interface PlatformToolSpec {
+	readonly capabilityId: CapabilityId;
+	readonly label: string;
+	readonly toolName: ToolName;
+	readonly template: ToolDefinition<any, any>;
+	/** Execution metadata: read passes { model }, bash passes { extensionContext, onUpdate }, the rest {} */
+	readonly metadata: (
+		extensionContext: ExtensionContext | undefined,
+		onUpdate: AgentToolUpdateCallback | undefined,
+	) => Record<string, unknown>;
+	readonly extras?: Pick<ToolDefinition, "prepareArguments" | "renderShell">;
+}
+
+const editToolTemplate = createEditToolDefinition("");
+
+const PLATFORM_TOOL_SPECS: PlatformToolSpec[] = [
+	{
+		capabilityId: READ_CAPABILITY_ID,
+		label: "read",
+		toolName: "read",
+		template: createReadToolDefinition(""),
+		metadata: (extensionContext) => ({ model: extensionContext?.model }),
+	},
+	{
+		capabilityId: BASH_CAPABILITY_ID,
+		label: "bash",
+		toolName: "bash",
+		template: createBashToolDefinition(""),
+		// The real ExtensionContext + onUpdate ride through metadata so the
+		// re-entered definition keeps session env (PI_*) and live updates.
+		metadata: (extensionContext, onUpdate) => ({ extensionContext, onUpdate }),
+	},
+	{
+		capabilityId: GREP_CAPABILITY_ID,
+		label: "grep",
+		toolName: "grep",
+		template: createGrepToolDefinition(""),
+		metadata: () => ({}),
+	},
+	{
+		capabilityId: FIND_CAPABILITY_ID,
+		label: "find",
+		toolName: "find",
+		template: createFindToolDefinition(""),
+		metadata: () => ({}),
+	},
+	{
+		capabilityId: LS_CAPABILITY_ID,
+		label: "ls",
+		toolName: "ls",
+		template: createLsToolDefinition(""),
+		metadata: () => ({}),
+	},
+	{
+		capabilityId: WRITE_CAPABILITY_ID,
+		label: "write",
+		toolName: "write",
+		template: createWriteToolDefinition(""),
+		metadata: () => ({}),
+	},
+	{
+		capabilityId: EDIT_CAPABILITY_ID,
+		label: "edit",
+		toolName: "edit",
+		template: editToolTemplate,
+		metadata: () => ({}),
+		extras: { prepareArguments: editToolTemplate.prepareArguments, renderShell: editToolTemplate.renderShell },
+	},
+];
+
+/**
+ * Build one AgentSession ToolDefinition from a platform registry export.
+ *
+ * The adapter boundary sits between two contract systems (platform tool export
+ * and coding-agent ToolDefinition); ToolDefinition<any, any> mirrors the
+ * existing wrapper.ts boundary typing, and the result detail type is `any`
+ * for the same reason — the per-tool detail types of the seven original
+ * builders were already erased by that boundary type.
+ */
+function buildPlatformToolDefinition(
+	spec: PlatformToolSpec,
+	tool: ToolCapabilityExport,
+	context: CapabilityContext,
+	cwd: string,
+	options: PlatformToolSetOptions,
+): ToolDefinition<any, any> {
+	return {
+		name: tool.definition.name,
+		label: spec.label,
+		description: tool.definition.description,
+		promptSnippet: tool.definition.promptSnippet,
+		promptGuidelines: tool.definition.promptGuidelines,
+		parameters: tool.definition.parameters,
+		prepareArguments: spec.extras?.prepareArguments,
+		renderShell: spec.extras?.renderShell,
+		execute: async (_toolCallId, params, signal, onUpdate, extensionContext) => {
+			const result = await tool.execute(params, {
+				capability: context,
+				signal: signal ?? new AbortController().signal,
+				sessionId: sessionId(options.sessionId ?? "unknown"),
+				cwd,
+				metadata: spec.metadata(extensionContext, onUpdate),
+			});
+			if (!result.success) {
+				throw new Error(result.error ?? `${spec.label} failed`);
+			}
+			return result.output as unknown as AgentToolResult<any>;
+		},
+		renderCall: spec.template.renderCall as unknown as ToolDefinition<any, any>["renderCall"],
+		renderResult: spec.template.renderResult as unknown as ToolDefinition<any, any>["renderResult"],
+	};
+}
+
+/** Shared single-tool lookup used by the granular accessors below. */
+function buildPlatformToolByName(
+	kernel: KernelRuntime,
+	toolName: ToolName,
+	cwd: string,
+	options: PlatformToolSetOptions,
+): ToolDefinition | undefined {
+	const spec = PLATFORM_TOOL_SPECS.find((entry) => entry.toolName === toolName);
+	if (!spec) return undefined;
+	const tool = kernel.capabilities.getExports<{ tool: ToolCapabilityExport }>(spec.capabilityId)?.tool;
+	const context = kernel.capabilities.getContext(spec.capabilityId);
+	if (!tool || !context) return undefined;
+	return buildPlatformToolDefinition(spec, tool, context, cwd, options);
+}
+
+/**
+ * Build the full builtin tool set from a kernel. Atomic: returns the complete
+ * `Record<ToolName, ToolDef>` when the kernel is booted and every one of the
+ * seven tool exports is available; undefined otherwise (kernel unavailable, or
+ * a capability init failure left a tool export missing). Kernel-parametrized
+ * so tests can exercise the atomicity without touching the process singleton.
+ */
+export function buildAllToolDefinitionsFromKernel(
+	kernel: KernelRuntime | undefined,
+	cwd: string,
+	options: PlatformToolSetOptions = {},
+): Record<ToolName, ToolDef> | undefined {
+	if (!kernel) return undefined;
+	const definitions: Partial<Record<ToolName, ToolDef>> = {};
+	for (const spec of PLATFORM_TOOL_SPECS) {
+		const tool = kernel.capabilities.getExports<{ tool: ToolCapabilityExport }>(spec.capabilityId)?.tool;
+		const context = kernel.capabilities.getContext(spec.capabilityId);
+		if (!tool || !context) {
+			// Partial registry: the kernel is up but a tool export is missing.
+			// The platform tool set is atomic — fall the whole set back to
+			// legacy, loudly, so a silently-degraded half-platform session
+			// cannot happen.
+			console.warn(chalk.yellow(`[platform] tool "${spec.label}" unavailable; falling back to legacy paths`));
+			return undefined;
+		}
+		definitions[spec.toolName] = buildPlatformToolDefinition(spec, tool, context, cwd, options);
+	}
+	return definitions as Record<ToolName, ToolDef>;
+}
+
+/**
+ * The Step 1.10 gate decision for the booted process singleton: the full
+ * platform tool set, or undefined (fall back to legacy).
+ */
+export function getPlatformAllToolDefinitions(
+	cwd: string,
+	options: PlatformToolSetOptions = {},
+): Record<ToolName, ToolDef> | undefined {
+	return buildAllToolDefinitionsFromKernel(getPlatformRuntime(), cwd, options);
+}
+
+/**
+ * Resolve the base tool set for an AgentSession: platform-first, legacy as the
+ * explicit fallback. The `??` is the whole gate — the platform tool set is
+ * atomic, so `_buildRuntime` can never produce a mixed platform/legacy set.
+ */
+export function resolveBaseToolDefinitions(
+	cwd: string,
+	options: PlatformToolSetOptions,
+	buildLegacy: (cwd: string) => Record<ToolName, ToolDef>,
+): Record<ToolName, ToolDef> {
+	return getPlatformAllToolDefinitions(cwd, options) ?? buildLegacy(cwd);
+}
+
+/**
+ * Granular accessors (used by tests and hosts that need one tool). The
+ * session itself consumes the atomic set via `getPlatformAllToolDefinitions` /
+ * `resolveBaseToolDefinitions`; each of these returns undefined when the
+ * kernel is not available, in which case callers fall back to the legacy
+ * definition.
  */
 export function getPlatformReadToolDefinition(
 	cwd: string,
-	options: PlatformReadOptions = {},
+	options: PlatformToolSetOptions = {},
 ): ToolDefinition | undefined {
 	const kernel = getPlatformRuntime();
 	if (!kernel) return undefined;
-	const tool = kernel.capabilities.getExports<{ tool: ToolCapabilityExport }>(READ_CAPABILITY_ID)?.tool;
-	const context = kernel.capabilities.getContext(READ_CAPABILITY_ID);
-	if (!tool || !context) return undefined;
-	return buildReadToolDefinition(tool, context, cwd, options);
+	return buildPlatformToolByName(kernel, "read", cwd, options);
 }
 
-export interface PlatformBashOptions {
-	sessionId?: string;
-}
-
-/**
- * Build the AgentSession bash ToolDefinition from the platform registry
- * exports. Returns undefined when the kernel is not available, in which case
- * callers fall back to the legacy definition.
- */
 export function getPlatformBashToolDefinition(
 	cwd: string,
-	options: PlatformBashOptions = {},
+	options: PlatformToolSetOptions = {},
 ): ToolDefinition | undefined {
 	const kernel = getPlatformRuntime();
 	if (!kernel) return undefined;
-	const tool = kernel.capabilities.getExports<{ tool: ToolCapabilityExport }>(BASH_CAPABILITY_ID)?.tool;
-	const context = kernel.capabilities.getContext(BASH_CAPABILITY_ID);
-	if (!tool || !context) return undefined;
-	return buildBashToolDefinition(tool, context, cwd, options);
+	return buildPlatformToolByName(kernel, "bash", cwd, options);
 }
 
-export interface PlatformGrepOptions {
-	sessionId?: string;
-}
-
-/**
- * Build the AgentSession grep ToolDefinition from the platform registry
- * exports. Returns undefined when the kernel is not available, in which case
- * callers fall back to the legacy definition.
- */
 export function getPlatformGrepToolDefinition(
 	cwd: string,
-	options: PlatformGrepOptions = {},
+	options: PlatformToolSetOptions = {},
 ): ToolDefinition | undefined {
 	const kernel = getPlatformRuntime();
 	if (!kernel) return undefined;
-	const tool = kernel.capabilities.getExports<{ tool: ToolCapabilityExport }>(GREP_CAPABILITY_ID)?.tool;
-	const context = kernel.capabilities.getContext(GREP_CAPABILITY_ID);
-	if (!tool || !context) return undefined;
-	return buildGrepToolDefinition(tool, context, cwd, options);
+	return buildPlatformToolByName(kernel, "grep", cwd, options);
 }
 
-export interface PlatformFindOptions {
-	sessionId?: string;
-}
-
-/**
- * Build the AgentSession find ToolDefinition from the platform registry
- * exports. Returns undefined when the kernel is not available, in which case
- * callers fall back to the legacy definition.
- */
 export function getPlatformFindToolDefinition(
 	cwd: string,
-	options: PlatformFindOptions = {},
+	options: PlatformToolSetOptions = {},
 ): ToolDefinition | undefined {
 	const kernel = getPlatformRuntime();
 	if (!kernel) return undefined;
-	const tool = kernel.capabilities.getExports<{ tool: ToolCapabilityExport }>(FIND_CAPABILITY_ID)?.tool;
-	const context = kernel.capabilities.getContext(FIND_CAPABILITY_ID);
-	if (!tool || !context) return undefined;
-	return buildFindToolDefinition(tool, context, cwd, options);
+	return buildPlatformToolByName(kernel, "find", cwd, options);
 }
 
-export interface PlatformLsOptions {
-	sessionId?: string;
-}
-
-/**
- * Build the AgentSession ls ToolDefinition from the platform registry
- * exports. Returns undefined when the kernel is not available, in which case
- * callers fall back to the legacy definition.
- */
-export function getPlatformLsToolDefinition(cwd: string, options: PlatformLsOptions = {}): ToolDefinition | undefined {
+export function getPlatformLsToolDefinition(
+	cwd: string,
+	options: PlatformToolSetOptions = {},
+): ToolDefinition | undefined {
 	const kernel = getPlatformRuntime();
 	if (!kernel) return undefined;
-	const tool = kernel.capabilities.getExports<{ tool: ToolCapabilityExport }>(LS_CAPABILITY_ID)?.tool;
-	const context = kernel.capabilities.getContext(LS_CAPABILITY_ID);
-	if (!tool || !context) return undefined;
-	return buildLsToolDefinition(tool, context, cwd, options);
+	return buildPlatformToolByName(kernel, "ls", cwd, options);
 }
 
-export interface PlatformWriteOptions {
-	sessionId?: string;
-}
-
-/**
- * Build the AgentSession write ToolDefinition from the platform registry
- * exports. Returns undefined when the kernel is not available, in which case
- * callers fall back to the legacy definition.
- */
 export function getPlatformWriteToolDefinition(
 	cwd: string,
-	options: PlatformWriteOptions = {},
+	options: PlatformToolSetOptions = {},
 ): ToolDefinition | undefined {
 	const kernel = getPlatformRuntime();
 	if (!kernel) return undefined;
-	const tool = kernel.capabilities.getExports<{ tool: ToolCapabilityExport }>(WRITE_CAPABILITY_ID)?.tool;
-	const context = kernel.capabilities.getContext(WRITE_CAPABILITY_ID);
-	if (!tool || !context) return undefined;
-	return buildWriteToolDefinition(tool, context, cwd, options);
+	return buildPlatformToolByName(kernel, "write", cwd, options);
 }
 
-export interface PlatformEditOptions {
-	sessionId?: string;
-}
-
-/**
- * Build the AgentSession edit ToolDefinition from the platform registry
- * exports. Returns undefined when the kernel is not available, in which case
- * callers fall back to the legacy definition.
- */
 export function getPlatformEditToolDefinition(
 	cwd: string,
-	options: PlatformEditOptions = {},
+	options: PlatformToolSetOptions = {},
 ): ToolDefinition | undefined {
 	const kernel = getPlatformRuntime();
 	if (!kernel) return undefined;
-	const tool = kernel.capabilities.getExports<{ tool: ToolCapabilityExport }>(EDIT_CAPABILITY_ID)?.tool;
-	const context = kernel.capabilities.getContext(EDIT_CAPABILITY_ID);
-	if (!tool || !context) return undefined;
-	return buildEditToolDefinition(tool, context, cwd, options);
-}
-
-// The adapter boundary sits between two contract systems (platform tool export
-// and coding-agent ToolDefinition); ToolDefinition<any, any> mirrors the
-// existing wrapper.ts boundary typing.
-function buildReadToolDefinition(
-	tool: ToolCapabilityExport,
-	context: CapabilityContext,
-	cwd: string,
-	options: PlatformReadOptions,
-): ToolDefinition<any, any> {
-	return {
-		name: tool.definition.name,
-		label: "read",
-		description: tool.definition.description,
-		promptSnippet: tool.definition.promptSnippet,
-		promptGuidelines: tool.definition.promptGuidelines,
-		parameters: tool.definition.parameters,
-		execute: async (_toolCallId, params, signal, _onUpdate, extCtx) => {
-			const result = await tool.execute(params as ReadToolInput, {
-				capability: context,
-				signal: signal ?? new AbortController().signal,
-				sessionId: sessionId(options.sessionId ?? "unknown"),
-				cwd,
-				metadata: {
-					model: extCtx?.model,
-				},
-			});
-			if (!result.success) {
-				throw new Error(result.error ?? "read failed");
-			}
-			return result.output as unknown as AgentToolResult<ReadToolDetails | undefined>;
-		},
-		renderCall: (args, theme, renderContext) =>
-			renderReadCall(
-				args as ReadRenderArgs | undefined,
-				theme,
-				renderContext as ToolRenderContext<unknown, ReadRenderArgs | undefined>,
-			),
-		renderResult: (result, renderOptions, theme, renderContext) =>
-			renderReadResult(
-				result as never,
-				renderOptions,
-				theme,
-				renderContext as ToolRenderContext<unknown, ReadRenderArgs | undefined>,
-			),
-	};
-}
-
-// The bash tool's renderers are object methods on the definition (never
-// extracted as module functions like read's); a template definition supplies
-// them to the platform-built definition without touching bash.ts.
-function buildBashToolDefinition(
-	tool: ToolCapabilityExport,
-	context: CapabilityContext,
-	cwd: string,
-	options: PlatformBashOptions,
-): ToolDefinition<any, any> {
-	const template = createBashToolDefinition("");
-	return {
-		name: tool.definition.name,
-		label: "bash",
-		description: tool.definition.description,
-		promptSnippet: tool.definition.promptSnippet,
-		promptGuidelines: tool.definition.promptGuidelines,
-		parameters: tool.definition.parameters,
-		execute: async (_toolCallId, params, signal, onUpdate, extCtx) => {
-			const result = await tool.execute(params as BashToolInput, {
-				capability: context,
-				signal: signal ?? new AbortController().signal,
-				sessionId: sessionId(options.sessionId ?? "unknown"),
-				cwd,
-				metadata: {
-					// The real ExtensionContext + onUpdate ride through metadata so the
-					// re-entered definition keeps session env (PI_*) and live updates.
-					extensionContext: extCtx,
-					onUpdate,
-				},
-			});
-			if (!result.success) {
-				throw new Error(result.error ?? "bash failed");
-			}
-			return result.output as unknown as AgentToolResult<BashToolDetails | undefined>;
-		},
-		renderCall: template.renderCall as unknown as ToolDefinition<any, any>["renderCall"],
-		renderResult: template.renderResult as unknown as ToolDefinition<any, any>["renderResult"],
-	};
-}
-
-// The grep tool's renderers are object methods on the definition (never
-// extracted as module functions like read's); a template definition supplies
-// them to the platform-built definition without touching grep.ts.
-function buildGrepToolDefinition(
-	tool: ToolCapabilityExport,
-	context: CapabilityContext,
-	cwd: string,
-	options: PlatformGrepOptions,
-): ToolDefinition<any, any> {
-	const template = createGrepToolDefinition("");
-	return {
-		name: tool.definition.name,
-		label: "grep",
-		description: tool.definition.description,
-		promptSnippet: tool.definition.promptSnippet,
-		promptGuidelines: tool.definition.promptGuidelines,
-		parameters: tool.definition.parameters,
-		execute: async (_toolCallId, params, signal, _onUpdate, _extCtx) => {
-			const result = await tool.execute(params as GrepToolInput, {
-				capability: context,
-				signal: signal ?? new AbortController().signal,
-				sessionId: sessionId(options.sessionId ?? "unknown"),
-				cwd,
-				metadata: {},
-			});
-			if (!result.success) {
-				throw new Error(result.error ?? "grep failed");
-			}
-			return result.output as unknown as AgentToolResult<GrepToolDetails | undefined>;
-		},
-		renderCall: template.renderCall as unknown as ToolDefinition<any, any>["renderCall"],
-		renderResult: template.renderResult as unknown as ToolDefinition<any, any>["renderResult"],
-	};
-}
-
-// The find tool's renderers are object methods on the definition (never
-// extracted as module functions like read's); a template definition supplies
-// them to the platform-built definition without touching find.ts.
-function buildFindToolDefinition(
-	tool: ToolCapabilityExport,
-	context: CapabilityContext,
-	cwd: string,
-	options: PlatformFindOptions,
-): ToolDefinition<any, any> {
-	const template = createFindToolDefinition("");
-	return {
-		name: tool.definition.name,
-		label: "find",
-		description: tool.definition.description,
-		promptSnippet: tool.definition.promptSnippet,
-		promptGuidelines: tool.definition.promptGuidelines,
-		parameters: tool.definition.parameters,
-		execute: async (_toolCallId, params, signal, _onUpdate, _extCtx) => {
-			const result = await tool.execute(params as FindToolInput, {
-				capability: context,
-				signal: signal ?? new AbortController().signal,
-				sessionId: sessionId(options.sessionId ?? "unknown"),
-				cwd,
-				metadata: {},
-			});
-			if (!result.success) {
-				throw new Error(result.error ?? "find failed");
-			}
-			return result.output as unknown as AgentToolResult<FindToolDetails | undefined>;
-		},
-		renderCall: template.renderCall as unknown as ToolDefinition<any, any>["renderCall"],
-		renderResult: template.renderResult as unknown as ToolDefinition<any, any>["renderResult"],
-	};
-}
-
-// The ls tool's renderers are object methods on the definition (never
-// extracted as module functions like read's); a template definition supplies
-// them to the platform-built definition without touching ls.ts.
-function buildLsToolDefinition(
-	tool: ToolCapabilityExport,
-	context: CapabilityContext,
-	cwd: string,
-	options: PlatformLsOptions,
-): ToolDefinition<any, any> {
-	const template = createLsToolDefinition("");
-	return {
-		name: tool.definition.name,
-		label: "ls",
-		description: tool.definition.description,
-		promptSnippet: tool.definition.promptSnippet,
-		promptGuidelines: tool.definition.promptGuidelines,
-		parameters: tool.definition.parameters,
-		execute: async (_toolCallId, params, signal, _onUpdate, _extCtx) => {
-			const result = await tool.execute(params as LsToolInput, {
-				capability: context,
-				signal: signal ?? new AbortController().signal,
-				sessionId: sessionId(options.sessionId ?? "unknown"),
-				cwd,
-				metadata: {},
-			});
-			if (!result.success) {
-				throw new Error(result.error ?? "ls failed");
-			}
-			return result.output as unknown as AgentToolResult<LsToolDetails | undefined>;
-		},
-		renderCall: template.renderCall as unknown as ToolDefinition<any, any>["renderCall"],
-		renderResult: template.renderResult as unknown as ToolDefinition<any, any>["renderResult"],
-	};
-}
-
-// The write tool's renderers are object methods on the definition (never
-// extracted as module functions like read's); a template definition supplies
-// them to the platform-built definition without touching write.ts.
-function buildWriteToolDefinition(
-	tool: ToolCapabilityExport,
-	context: CapabilityContext,
-	cwd: string,
-	options: PlatformWriteOptions,
-): ToolDefinition<any, any> {
-	const template = createWriteToolDefinition("");
-	return {
-		name: tool.definition.name,
-		label: "write",
-		description: tool.definition.description,
-		promptSnippet: tool.definition.promptSnippet,
-		promptGuidelines: tool.definition.promptGuidelines,
-		parameters: tool.definition.parameters,
-		execute: async (_toolCallId, params, signal, _onUpdate, _extCtx) => {
-			const result = await tool.execute(params as WriteToolInput, {
-				capability: context,
-				signal: signal ?? new AbortController().signal,
-				sessionId: sessionId(options.sessionId ?? "unknown"),
-				cwd,
-				metadata: {},
-			});
-			if (!result.success) {
-				throw new Error(result.error ?? "write failed");
-			}
-			return result.output as unknown as AgentToolResult<undefined>;
-		},
-		renderCall: template.renderCall as unknown as ToolDefinition<any, any>["renderCall"],
-		renderResult: template.renderResult as unknown as ToolDefinition<any, any>["renderResult"],
-	};
-}
-
-// The edit tool's renderers, prepareArguments compatibility shim, and self
-// shell rendering are object members on the definition (never extracted as
-// module functions like read's); a template definition supplies them to the
-// platform-built definition without touching edit.ts.
-function buildEditToolDefinition(
-	tool: ToolCapabilityExport,
-	context: CapabilityContext,
-	cwd: string,
-	options: PlatformEditOptions,
-): ToolDefinition<any, any> {
-	const template = createEditToolDefinition("");
-	return {
-		name: tool.definition.name,
-		label: "edit",
-		description: tool.definition.description,
-		promptSnippet: tool.definition.promptSnippet,
-		promptGuidelines: tool.definition.promptGuidelines,
-		parameters: tool.definition.parameters,
-		prepareArguments: template.prepareArguments,
-		renderShell: template.renderShell,
-		execute: async (_toolCallId, params, signal, _onUpdate, _extCtx) => {
-			const result = await tool.execute(params as EditToolInput, {
-				capability: context,
-				signal: signal ?? new AbortController().signal,
-				sessionId: sessionId(options.sessionId ?? "unknown"),
-				cwd,
-				metadata: {},
-			});
-			if (!result.success) {
-				throw new Error(result.error ?? "edit failed");
-			}
-			return result.output as unknown as AgentToolResult<EditToolDetails | undefined>;
-		},
-		renderCall: template.renderCall as unknown as ToolDefinition<any, any>["renderCall"],
-		renderResult: template.renderResult as unknown as ToolDefinition<any, any>["renderResult"],
-	};
+	return buildPlatformToolByName(kernel, "edit", cwd, options);
 }

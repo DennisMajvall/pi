@@ -46,15 +46,7 @@ import {
 	streamSimple,
 } from "@earendil-works/pi-ai/compat";
 import { getThemeByName, theme } from "../modes/interactive/theme/theme.ts";
-import {
-	getPlatformBashToolDefinition,
-	getPlatformEditToolDefinition,
-	getPlatformFindToolDefinition,
-	getPlatformGrepToolDefinition,
-	getPlatformLsToolDefinition,
-	getPlatformReadToolDefinition,
-	getPlatformWriteToolDefinition,
-} from "../platform/platform-runtime.ts";
+import { resolveBaseToolDefinitions } from "../platform/platform-runtime.ts";
 import { stripFrontmatter } from "../utils/frontmatter.ts";
 import { resolvePath } from "../utils/paths.ts";
 import { sleep } from "../utils/sleep.ts";
@@ -2569,59 +2561,19 @@ export class AgentSession {
 						createToolDefinitionFromAgentTool(tool),
 					]),
 				)
-			: createAllToolDefinitions(this._cwd, {
-					read: { autoResizeImages },
-					bash: { commandPrefix: shellCommandPrefix, shellPath },
-				});
-
-		// Platform pilot: source the read, bash, and grep definitions from the
-		// capability registry when the kernel is booted; otherwise the legacy
-		// path above is used as-is. Settings no longer ride through options:
-		// the capabilities read them from the injected SettingsService.
-		if (!this._baseToolsOverride) {
-			const platformRead = getPlatformReadToolDefinition(this._cwd, {
-				sessionId: this.sessionManager.getSessionId(),
-			});
-			if (platformRead) {
-				baseToolDefinitions.read = platformRead;
-			}
-			const platformBash = getPlatformBashToolDefinition(this._cwd, {
-				sessionId: this.sessionManager.getSessionId(),
-			});
-			if (platformBash) {
-				baseToolDefinitions.bash = platformBash;
-			}
-			const platformGrep = getPlatformGrepToolDefinition(this._cwd, {
-				sessionId: this.sessionManager.getSessionId(),
-			});
-			if (platformGrep) {
-				baseToolDefinitions.grep = platformGrep;
-			}
-			const platformFind = getPlatformFindToolDefinition(this._cwd, {
-				sessionId: this.sessionManager.getSessionId(),
-			});
-			if (platformFind) {
-				baseToolDefinitions.find = platformFind;
-			}
-			const platformLs = getPlatformLsToolDefinition(this._cwd, {
-				sessionId: this.sessionManager.getSessionId(),
-			});
-			if (platformLs) {
-				baseToolDefinitions.ls = platformLs;
-			}
-			const platformWrite = getPlatformWriteToolDefinition(this._cwd, {
-				sessionId: this.sessionManager.getSessionId(),
-			});
-			if (platformWrite) {
-				baseToolDefinitions.write = platformWrite;
-			}
-			const platformEdit = getPlatformEditToolDefinition(this._cwd, {
-				sessionId: this.sessionManager.getSessionId(),
-			});
-			if (platformEdit) {
-				baseToolDefinitions.edit = platformEdit;
-			}
-		}
+			: // Step 1.10 gate: the platform is the DEFAULT execution path for the
+				// builtin tools. The full seven-tool set comes from the capability
+				// registry when the kernel is booted (atomic — all seven or none);
+				// the legacy definitions are the fallback when the kernel is
+				// unavailable or a tool export is missing. Settings no longer ride
+				// through options: the capabilities read them from the injected
+				// SettingsService.
+				resolveBaseToolDefinitions(this._cwd, { sessionId: this.sessionManager.getSessionId() }, (cwd) =>
+					createAllToolDefinitions(cwd, {
+						read: { autoResizeImages },
+						bash: { commandPrefix: shellCommandPrefix, shellPath },
+					}),
+				);
 
 		this._baseToolDefinitions = new Map(
 			Object.entries(baseToolDefinitions).map(([name, tool]) => [name, tool as ToolDefinition]),

@@ -30,6 +30,11 @@ import { executePlatformTool } from "./tool-execution.ts";
 
 const FIND_CAPABILITY_ID = capabilityId("tool.find");
 
+// One template per capability (Step 1.10): the manifest's provides.tool prose
+// is sourced from it so the two can never drift apart. init reuses the same
+// template for the export definition.
+const toolTemplate = createFindToolDefinition("");
+
 /**
  * Static manifest. Discovery and registration need only this — no implementation.
  */
@@ -41,10 +46,10 @@ export const findManifest: CapabilityManifest = {
 	provides: {
 		tool: {
 			name: "find",
-			description:
-				"Search for files by glob pattern. Returns matching file paths relative to the search directory. Output is truncated to 1000 results or 50KB (whichever is hit first).",
+			description: toolTemplate.description,
 			parameters: findSchema,
-			promptSnippet: "Find files by glob pattern",
+			promptSnippet: toolTemplate.promptSnippet,
+			promptGuidelines: toolTemplate.promptGuidelines,
 		},
 	},
 	requires: { services: ["fs"], capabilities: [] },
@@ -70,7 +75,7 @@ export const findCapability: BuiltinCapability = {
 			// Template for definition metadata; the exported execute builds a
 			// fresh definition per execution using the execution cwd and the
 			// injected FileSystemService.
-			const template = createFindToolDefinition("");
+			const template = toolTemplate;
 
 			const tool: ToolCapabilityExport = {
 				definition: {

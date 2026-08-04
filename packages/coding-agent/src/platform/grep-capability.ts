@@ -39,6 +39,11 @@ import { executePlatformTool } from "./tool-execution.ts";
 const GREP_CAPABILITY_ID = capabilityId("tool.grep");
 const READ_CAPABILITY_ID = capabilityId("tool.read");
 
+// One template per capability (Step 1.10): the manifest's provides.tool prose
+// is sourced from it so the two can never drift apart. init reuses the same
+// template for the export definition.
+const toolTemplate = createGrepToolDefinition("");
+
 /**
  * Static manifest. Discovery and registration need only this — no implementation.
  */
@@ -50,10 +55,10 @@ export const grepManifest: CapabilityManifest = {
 	provides: {
 		tool: {
 			name: "grep",
-			description:
-				"Search file contents for a pattern. Returns matching lines with file paths and line numbers. Respects .gitignore.",
+			description: toolTemplate.description,
 			parameters: grepSchema,
-			promptSnippet: "Search file contents for patterns (respects .gitignore)",
+			promptSnippet: toolTemplate.promptSnippet,
+			promptGuidelines: toolTemplate.promptGuidelines,
 		},
 	},
 	requires: {
@@ -98,7 +103,7 @@ export const grepCapability: BuiltinCapability = {
 			// Template for definition metadata; the exported execute builds a
 			// fresh definition per execution using the execution cwd and the
 			// injected FileSystemService + read peer.
-			const template = createGrepToolDefinition("");
+			const template = toolTemplate;
 
 			const tool: ToolCapabilityExport = {
 				definition: {

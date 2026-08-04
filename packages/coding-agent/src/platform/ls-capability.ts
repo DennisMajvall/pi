@@ -22,6 +22,11 @@ import { executePlatformTool } from "./tool-execution.ts";
 
 const LS_CAPABILITY_ID = capabilityId("tool.ls");
 
+// One template per capability (Step 1.10): the manifest's provides.tool prose
+// is sourced from it so the two can never drift apart. init reuses the same
+// template for the export definition.
+const toolTemplate = createLsToolDefinition("");
+
 /**
  * Static manifest. Discovery and registration need only this — no implementation.
  */
@@ -33,10 +38,10 @@ export const lsManifest: CapabilityManifest = {
 	provides: {
 		tool: {
 			name: "ls",
-			description:
-				"List directory contents. Returns entries sorted alphabetically, with '/' suffix for directories. Includes dotfiles. Output is truncated to 500 entries or 50KB (whichever is hit first).",
+			description: toolTemplate.description,
 			parameters: lsSchema,
-			promptSnippet: "List directory contents",
+			promptSnippet: toolTemplate.promptSnippet,
+			promptGuidelines: toolTemplate.promptGuidelines,
 		},
 	},
 	requires: { services: ["fs"], capabilities: [] },
@@ -59,7 +64,7 @@ export const lsCapability: BuiltinCapability = {
 			// Template for definition metadata; the exported execute builds a
 			// fresh definition per execution using the execution cwd and the
 			// injected FileSystemService.
-			const template = createLsToolDefinition("");
+			const template = toolTemplate;
 
 			const tool: ToolCapabilityExport = {
 				definition: {
