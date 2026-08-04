@@ -34,6 +34,10 @@
       "types": "./dist/identifier/index.d.ts",
       "import": "./dist/identifier/index.js"
     },
+    "./plan": {
+      "types": "./dist/plan/index.d.ts",
+      "import": "./dist/plan/index.js"
+    },
     "./schema": {
       "types": "./dist/schema/index.d.ts",
       "import": "./dist/schema/index.js"

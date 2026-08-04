@@ -30,8 +30,9 @@ Detailed substeps and per-step decisions live in
 `docs/planning/PLANNING_STEPS.md` (per-step design/report docs are added to
 `docs/planning/` as each step is worked).
 
-- [ ] Step 2.1 — Plan object: canonical TypeBox schemas (Goal, Assumption,
+- [x] Step 2.1 — Plan object: canonical TypeBox schemas (Goal, Assumption,
       Constraint, Task, PlanningPolicy, Revision, Plan, Metrics) + status enum
+      (`docs/planning/PLAN_OBJECT_DESIGN.md` / `PLAN_OBJECT_REPORT.md`)
 - [ ] Step 2.2 — Plan store: project/workspace-scoped on-disk JSON is the durable
       source of truth (not in-memory); read-through so external edits never drift
 - [ ] Step 2.3 — Planning capability skeleton: the generic stage contract
@@ -101,8 +102,14 @@ Detailed substeps and per-step decisions live in
   seven `buildXToolDefinition` adapters collapsed into one generic builder
   driven by a per-tool spec table, and the manifests' `provides.tool` prose
   is sourced from the tool templates (a fixture pins manifest↔tool equality).
-  Next: Planning (`docs/PLANNING_ARCHITECTURE.md`), starting with the Plan
-  object (Step 2.1).
+  Next: Planning (`docs/PLANNING_ARCHITECTURE.md`).
+- Current position (Planning): Step 2.1 is complete — the canonical Plan object
+  (Goal/Assumption/Constraint/Task/PlanningPolicy/Revision/Plan/Metrics +
+  status & revision-reason enums) is a validated TypeBox schema in
+  `@earendil-works/pi-platform` (`/plan` subpath), with the §5 plan-content-vs-
+  execution-state split enforced structurally and `requiredCapabilities`
+  capability-id-validated. 14 unit tests green, repo check green. Next: the
+  plan store (Step 2.2).
 - Step cadence: one capability or service per step. Every step's report ends
   with a "Recommended Next Step" section that picks the next cheapest
   validation, grounded in the design docs — this is how steps 1.3–1.10 were

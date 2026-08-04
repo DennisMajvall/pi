@@ -1,6 +1,6 @@
 # Planning (ROADMAP Step 2) — Substep Decomposition
 
-**Status:** Plan only. No implementation yet.
+**Status:** Step 2.1 complete; steps 2.2–2.12 planned. No store / pipeline implementation yet.
 **Master design:** `docs/PLANNING_ARCHITECTURE.md` (the canonical spec — every step
 below resolves one ability defined there).
 **Format:** mirrors the Step 1 cadence — one capability or service per step; each
@@ -59,18 +59,23 @@ The architecture makes this tractable:
 
 ---
 
-## Step 2.1 — Plan object (canonical schema)
+## Step 2.1 — Plan object (canonical schema) — DONE
+
+**Report:** `docs/planning/PLAN_OBJECT_REPORT.md` · **Design:** `docs/planning/PLAN_OBJECT_DESIGN.md`
+
+**Implemented:** canonical TypeBox schemas in `@earendil-works/pi-platform`
+(`/plan` contracts at `packages/platform/src/plan/index.ts`, `/schema/plan.ts`
+constants, `@earendil-works/pi-platform/plan` subpath): `Goal`, `Assumption`,
+`Constraint`, `Task`, `PlanningPolicy`, `Revision`, `Plan`, `Metrics` + the
+`status` and `revision reason` enums. The §5 split is structural (`Task` has
+`additionalProperties: false`, no execution fields); `requiredCapabilities` is
+`CapabilityId`-validated. Decisions made: placement follows Step 1.2 contract
+discipline; `maxClarificationRounds` (architecture §9) deferred to the 2.4
+Clarification Gate; the planning `Plan` is exported via the `/plan` subpath
+only (root `Plan` name owned by the pre-existing orchestration `Plan`). 14 unit
+tests green; repo `npm run check` green.
 
 **Arch refs:** §4 (canonical schema), §14 (`Metrics`).
-**Decisions this step must make:**
-- The canonical TypeBox schemas: `Goal`, `Assumption`, `Constraint`, `Task`,
-  `PlanningPolicy`, `Revision`, `Plan`, `Metrics`, plus the `status` and `revision
-  reason` enums.
-- Where the schema lives (contracts/module placement — follow the Step 1.2 contract
-  discipline and `schemaVersion`).
-- Any field the plan carries that execution must *not* (kept out per §5).
-**Deliverable:** a single validated `Plan` schema used by every stage; fixture/round-trip
-test that a canonical plan validates cleanly.
 **Recommended next step:** the plan store, so the schema has a real owner (2.2).
 
 ---

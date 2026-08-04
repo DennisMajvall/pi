@@ -23,6 +23,10 @@ export * from "./error/index.ts";
 export * from "./event/index.ts";
 // Identifier contracts
 export * from "./identifier/index.ts";
+// Plan contracts (planning domain). NOTE: exposed via the `/plan` subpath
+// only, not the root — the root would collide with the pre-existing
+// orchestration `Plan` ({ steps }) in ./capability/index.ts.
+// export * from "./plan/index.ts";
 // Runtime contracts
 export * from "./runtime/index.ts";
 // Schema contracts
