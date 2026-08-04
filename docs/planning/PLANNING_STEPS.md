@@ -175,6 +175,26 @@ repo `npm run check` green.
 **Arch refs:** §6.3.3, §7 (deterministic downgrade rule: hard limits cap policy, never upgrade).
 **Recommended next step:** Task Decomposition (2.7).
 
+## Step 2.7 — Task Decomposition — DONE
+
+**Report:** `docs/planning/TASK_DECOMPOSITION_REPORT.md` · **Design:** `docs/planning/TASK_DECOMPOSITION_DESIGN.md`
+
+**Implemented:** Task Decomposition
+(`packages/platform/src/planning/task-decomposition.ts`): `taskDecompositionStage`
+is an `orchestration` capability (`orchestration.tasks`) emitting unordered
+`{ id, title, purpose, deliverable }` tuples against `TaskDecompositionSchema`
+(`additionalProperties: false`, so no deps/priority/parallelism can leak in),
+routed via the `task_decomposition` model key through the §11 runner (mandatory),
+inputting goal + constraints + policy (`maxTasks`) + capabilities + skills. The
+deterministic passes (`packages/platform/src/planning/tasks.ts`): `dedupeTasks`
+(by deliverable, first wins), `enforceMaxTasks` (dedupe then cap to
+`policy.maxTasks`, §6.6), and `completeTasks` (fill empty default fields onto the
+full 2.1 `Task` shape so `TaskSchema`/`PlanSchema` validate immediately). 7 unit
+tests green; repo `npm run check` green.
+
+**Arch refs:** §6.3.4 (unordered, unprioritized tasks; dedupe pass; no ordering/deps), §6.2, §11.
+**Recommended next step:** Dependency Builder (2.8).
+
 ---
 
 ## Step 2.2 — Plan store + scope + persistence

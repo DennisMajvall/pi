@@ -2,13 +2,13 @@
  * @earendil-works/pi-platform/planning
  *
  * Implementation of the generic planning-stage pattern (Step 2.3)
- * and the AI stages + deterministic folds (Steps 2.4–2.6):
+ * and the AI stages + deterministic folds (Steps 2.4–2.7):
  * the stage contract + strict-JSON runner + per-stage model routing, the
  * planning event surface, the stage-as-`orchestration`-capability wrapper,
  * Goal Analysis (cheap-model routed), the deterministic Clarification Gate,
- * Execution Strategy Selection, the policy guard hook, and Constraint
- * Extraction with the deterministic policy-downgrade fold.
- * Exposed via the subpath only (implementation, like /kernel).
+ * Execution Strategy Selection, the policy guard hook, Constraint
+ * Extraction's policy-downgrade fold, and Task Decomposition with dedupe +
+ * budget passes. Exposed via the subpath only (implementation, like /kernel).
  */
 
 export {
@@ -72,4 +72,13 @@ export {
 	type StrictJsonResult,
 	stageModelRoutingFromSettings,
 } from "./stage.ts";
+export {
+	DecomposedTaskSchema,
+	TASK_DECOMPOSITION_MODEL_KEY,
+	TASK_DECOMPOSITION_SYSTEM_PROMPT,
+	type TaskDecompositionInput,
+	TaskDecompositionSchema,
+	taskDecompositionStage,
+} from "./task-decomposition.ts";
+export { completeTasks, type DecomposedTask, dedupeTasks, enforceMaxTasks } from "./tasks.ts";
 export { type CreateDraftPlanInput, createDraftPlanStage } from "./trivial.ts";
