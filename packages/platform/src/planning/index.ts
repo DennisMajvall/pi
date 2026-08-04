@@ -136,6 +136,13 @@ export {
 	renderRevisionHistory,
 	renderTaskList,
 } from "./plan-view.ts";
+export {
+	type PlanViewAction,
+	type PlanViewMode,
+	PlanViewWidget,
+	type PlanViewWidgetOptions,
+	renderTaskDetail,
+} from "./plan-view-widget.ts";
 export { downgradePolicy, type PolicyDowngrade } from "./policy.ts";
 export {
 	type CapabilityResolution,
