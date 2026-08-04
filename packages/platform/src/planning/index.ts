@@ -20,6 +20,19 @@ export {
 	runClarificationGate,
 } from "./clarification-gate.ts";
 export {
+	aiComplexityVerdict,
+	assessComplexityLayered,
+	COMPLEXITY_MODEL_KEY,
+	type ComplexityAssessment,
+	type ComplexityDependencies,
+	type ComplexityInput,
+	type ComplexityPreFilterOptions,
+	type ComplexityVerdict,
+	ComplexityVerdictSchema,
+	type DeterministicComplexity,
+	deterministicPreFilter,
+} from "./complexity.ts";
+export {
 	CONSTRAINT_EXTRACTION_MODEL_KEY,
 	CONSTRAINT_EXTRACTION_SYSTEM_PROMPT,
 	type ConstraintExtractionInput,
@@ -61,6 +74,16 @@ export {
 	planReplanningEvent,
 } from "./events.ts";
 export {
+	attachOverlay,
+	completeTask,
+	ExecutionOverlay,
+	type ExecutionOverlayEntry,
+	type ExecutionOverlayOptions,
+	ExecutionTaskStatus,
+	failTask,
+	markRunning,
+} from "./execution-overlay.ts";
+export {
 	EXECUTION_STRATEGY_MODEL_KEY,
 	EXECUTION_STRATEGY_SYSTEM_PROMPT,
 	type ExecutionStrategyInput,
@@ -93,6 +116,13 @@ export {
 	optimizerStage,
 } from "./optimizer.ts";
 export {
+	ClarificationRequiredError,
+	type PlanningPipelineContext,
+	type PlanningPipelineResult,
+	type PlanningStages,
+	runPlanningPipeline,
+} from "./orchestrator.ts";
+export {
 	renderPlanDag,
 	renderPlanHead,
 	renderPlanView,
@@ -100,6 +130,16 @@ export {
 	renderTaskList,
 } from "./plan-view.ts";
 export { downgradePolicy, type PolicyDowngrade } from "./policy.ts";
+export {
+	type CapabilityResolution,
+	type CapabilityResolver,
+	executeApprovedPlan,
+	executeTask,
+	resolveRequiredCapabilities,
+	type SchedulerCapability,
+	schedulerNext,
+	schedulerReady,
+} from "./scheduler.ts";
 export {
 	DEFAULT_STAGE_MODEL_ROUTING,
 	definePlanningStageCapability,
@@ -128,6 +168,11 @@ export {
 	taskDecompositionStage,
 } from "./task-decomposition.ts";
 export { completeTasks, type DecomposedTask, dedupeTasks, enforceMaxTasks } from "./tasks.ts";
+export {
+	evaluateTrigger,
+	type TriggerDecision,
+	type TriggerInput,
+} from "./trigger.ts";
 export { type CreateDraftPlanInput, createDraftPlanStage } from "./trivial.ts";
 export {
 	applyPlanEdit,

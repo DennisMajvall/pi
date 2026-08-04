@@ -278,6 +278,39 @@ green; repo `npm run check` green.
 
 ---
 
+## Step 2.12 — Scheduler + execution overlay + end-to-end (Planning complete) — DONE
+
+**Report:** `docs/planning/PLAN_SCHEDULER_E2E_REPORT.md` · **Design:** `docs/planning/PLAN_SCHEDULER_E2E_DESIGN.md`
+
+**Implemented:** the deterministic scheduler + execution overlay + layered complexity/
+hybrid trigger + end-to-end orchestrator (`packages/platform/src/planning/`:
+`execution-overlay.ts` + `scheduler.ts` + `complexity.ts` + `trigger.ts` + `orchestrator.ts`).
+The **execution overlay** (§5/§12) keeps per-task runtime state (status
+`pending|ready|running|blocked|failed|done`, attempts, responsible executor, results)
+in a side-keyed table strictly separate from plan content — `TaskSchema`'s
+`additionalProperties:false` already forbids it on the plan. The **minimal
+scheduler** (§6.5): `ready(t)` from `dependsOn`, `next` by priority then id (total and
+reproducible, no model), resolving `requiredCapabilities` to registry capabilities with
+missing ids reported; `executeTask`/`executeApprovedPlan` walk the approved DAG to a
+capability execution (full parallel/resume/retry is roadmap #7). **Layered complexity**
+(pre-filter short-circuits trivial prompts with no model call; cheap-model AI judgment
+returns a strict `{planWarranted}` verdict on the same cheap routing as Goal Analysis)
+backs the **hybrid trigger**: `/plan <request>` always runs the pipeline, otherwise
+planning engages only when the layered check warrants it. The **orchestrator**
+(`runPlanningPipeline`) chains 2.4–2.11 (Goal Analysis → Clarification Gate → Strategy →
+Constraints + never-upgrade downgrade → Decomposition → Dependency Builder → Critic →
+Optimizer → Validation → Metrics → Review gate), persists the **approved** plan once,
+and emits `plan.created`+`plan.approved`; a goal needing clarification without answers
+throws `ClarificationRequiredError`. Model routing + completions are host-injected
+(stages pre-built; tests use fakes) — the platform adds no settings surface. The
+**Planning-complete** gate is closed: a request reaches the pipeline via `/plan` or the
+complexity auto-trigger, flows through all of §6.3 into an approved plan (validated,
+with metrics, on-disk, reviewable, editable in any editor), and the minimal scheduler
+resolves a ready task to a capability execution. 18 unit tests green (full suite 212);
+repo `npm run check` green. The dedicated TUI plan view is Step 2.13.
+
+---
+
 ## Step 2.2 — Plan store + scope + persistence
 
 **Arch refs:** §8 (versioning), §15 (where the plan lives: session/project/user

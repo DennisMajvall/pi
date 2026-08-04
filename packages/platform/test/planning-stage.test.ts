@@ -124,6 +124,40 @@ describe("strict-JSON stage runner (§11)", () => {
 		});
 		expect(result).toEqual({ kind: "ok", output: { x: 5, y: 6 }, attempts: 1 });
 	});
+
+	it("contains a completion throw (§11): optional degrades, mandatory aborts, never crashes the pipeline", async () => {
+		const throwing = async () => {
+			throw new Error("upstream network failure");
+		};
+		const optional = await runStrictJsonStage({
+			completion: throwing,
+			systemPrompt: "sys",
+			userPrompt: "user",
+			outputSchema: pointSchema,
+			model: "m",
+			mandatory: false,
+			stageName: "critic",
+		});
+		expect(optional.kind).toBe("degraded");
+		if (optional.kind === "degraded") {
+			expect(optional.error).toContain("network failure");
+		}
+
+		const mandatory = await runStrictJsonStage({
+			completion: throwing,
+			systemPrompt: "sys",
+			userPrompt: "user",
+			outputSchema: pointSchema,
+			model: "m",
+			mandatory: true,
+			stageName: "goal_analysis",
+		});
+		expect(mandatory.kind).toBe("aborted");
+		if (mandatory.kind === "aborted") {
+			expect(mandatory.error).toContain("goal_analysis");
+			expect(mandatory.error).toContain("network failure");
+		}
+	});
 });
 
 describe("per-stage model routing", () => {

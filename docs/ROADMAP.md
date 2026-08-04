@@ -62,10 +62,11 @@ Detailed substeps and per-step decisions live in
 - [x] Step 2.11 — User Review / approval gate (status transitions; schema-
       preserving `user_edit`; on-disk editable plan)
       (`docs/planning/PLAN_USER_REVIEW_DESIGN.md` / `PLAN_USER_REVIEW_REPORT.md`)
-- [ ] Step 2.12 — **Planning complete**: deterministic scheduler + execution
+- [x] Step 2.12 — **Planning complete**: deterministic scheduler + execution
       overlay (plan content vs state split); hybrid trigger (`/plan` + complexity
       auto-engage via deterministic pre-filter + cheap-model AI judgment);
       end-to-end request→approved plan (full execution engine is roadmap #7)
+      (`docs/planning/PLAN_SCHEDULER_E2E_DESIGN.md` / `PLAN_SCHEDULER_E2E_REPORT.md`)
 - [ ] Step 2.13 — TUI Plan View (dedicated plan review surface: plan list + drill-in
       DAG/task view; prompt-driven `user_edit` + approval in the TUI)
       (`docs/planning/PLANNING_STEPS.md` Step 2.13)
@@ -115,7 +116,7 @@ Detailed substeps and per-step decisions live in
   driven by a per-tool spec table, and the manifests' `provides.tool` prose
   is sourced from the tool templates (a fixture pins manifest↔tool equality).
   Next: Planning (`docs/PLANNING_ARCHITECTURE.md`).
-- Current position (Planning): Steps 2.1–2.10 complete — the canonical Plan object
+- Current position (Planning): Steps 2.1–2.12 complete — the canonical Plan object
   (Goal/Assumption/Constraint/Task/PlanningPolicy/Revision/Plan/Metrics +
   status & revision-reason enums) is a validated TypeBox schema in
   `@earendil-works/pi-platform` (`/plan` subpath); a `PlanStore` (`/kernel`) owns
@@ -149,10 +150,35 @@ Detailed substeps and per-step decisions live in
   revision) behind the `orchestration.plan.edit` capability; and the deterministic
   plan view (`renderPlanView`/`renderPlanDag`, the shared review view source the
   TUI consumes in 2.13).
-  194 unit tests green, repo check green. Next: the minimal deterministic
-  scheduler + execution overlay + end-to-end request→approved plan, which wires
-  the orchestrator and real model routing (Step 2.12); the dedicated TUI plan view
-  is then a follow-up step (2.13).
+  194 unit tests green, repo check green. Step 2.12 closed the **Planning-complete**
+  gate: the execution overlay (`execution-overlay.ts`, per-task `pending|ready|running|
+  blocked|failed|done` + attempts/executor/results in a side-table strictly separate
+  from plan content — `TaskSchema.additionalProperties:false` forbids it on the plan),
+  the minimal deterministic scheduler (`scheduler.ts`: `ready(t)` from `dependsOn`,
+  `next` by priority then id, `requiredCapabilities`→registry-capability resolution
+  with missing ids reported, and the `executeTask`/`executeApprovedPlan` walking skeleton
+  that walks an approved DAG to a capability execution — full parallel/resume/retry is
+  roadmap #7), the layered complexity detection (`complexity.ts`: deterministic
+  pre-filter short-circuits trivial prompts with no model call, cheap-model AI judgment
+  returns a strict `{planWarranted}` verdict on the same cheap routing family as Goal
+  Analysis) backing the hybrid entry trigger (`trigger.ts`: `/plan <request>` always
+  runs the pipeline, otherwise auto only when the layered check warrants it), and the
+  end-to-end orchestrator (`orchestrator.ts`: `runPlanningPipeline` chains 2.4–2.11 into
+  a validated, scored, **approved** plan persisted once on disk, emitting `plan.created`
+  + `plan.approved`, throwing `ClarificationRequiredError` when clarification is needed
+  without answers). Model routing + completions are host-injected (stages pre-built;
+  tests use fakes) — the platform adds no settings surface; real binding from
+  `planning.models.*` is the coding-agent wiring. The AI stages' strict-JSON runner
+  (`runStrictJsonStage`) grounds each stage with its exact output schema and contains
+  completion failures (§11), so cheap/free models follow the strict schemas and a
+  transport/empty reply degrades an optional stage or aborts a mandatory one instead
+  of crashing the pipeline. Now 217 unit tests green, repo check
+  green, plus an opt-in free-model e2e (`test/planning-e2e-free-model.test.ts`, skipped
+  without `OPENROUTER_API_KEY`) that drives the real pipeline with a free OpenRouter
+  model and checks statically that a plan was made correctly. Next: the dedicated TUI
+  plan view (Step 2.13), which re-checks the
+  Planning-complete gate with the interactive review surface in place; after that,
+  roadmap #3 (Workspaces) or a lean-slice handoff to #7.
 - Step cadence: one capability or service per step. Every step's report ends
   with a "Recommended Next Step" section that picks the next cheapest
   validation, grounded in the design docs — this is how steps 1.3–1.10 were

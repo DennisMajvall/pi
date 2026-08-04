@@ -151,14 +151,32 @@ export async function runStrictJsonStage<Out extends TSchema>(
 	const stageName = options.stageName ?? "stage";
 	let attempts = 0;
 	let validationErrors: string[] = [];
+	// Ground the model with the exact output schema it must produce. The prose
+	// system prompts only *name* the schema; models (especially cheap/free ones)
+	// comply far more reliably when the precise JSON shape is spelled out. This
+	// is the platform-side stand-in for the runtime's generation-constrained
+	// sampling (packages/ai constrained-sampling.ts), which the injected opaque
+	// StageCompletion cannot use.
+	const promptBase = buildPromptBase(options.userPrompt, options.outputSchema);
 	while (attempts < MAX_ATTEMPTS) {
 		attempts++;
-		const userPrompt = buildPrompt(options.userPrompt, validationErrors);
-		const text = await options.completion({
-			systemPrompt: options.systemPrompt,
-			userPrompt,
-			model: options.model,
-		});
+		const userPrompt = appendValidationErrors(promptBase, validationErrors);
+		// A completion may throw (transport/network error, empty upstream reply).
+		// Contain it as a failed attempt rather than letting it crash the whole
+		// pipeline — §11 isolation extends to transport failures, so an optional
+		// stage degrades and a mandatory stage aborts with the diagnostic, each
+		// after the retry budget is exhausted.
+		let text: string;
+		try {
+			text = await options.completion({
+				systemPrompt: options.systemPrompt,
+				userPrompt,
+				model: options.model,
+			});
+		} catch (error) {
+			validationErrors = [toErrorMessage(error)];
+			continue;
+		}
 		const parsed = parseJsonStrict(text);
 		if (parsed !== undefined && Value.Check(options.outputSchema, parsed)) {
 			return { kind: "ok", output: parsed as Static<Out>, attempts };
@@ -194,13 +212,26 @@ export async function runOptionalStage<Out extends TSchema>(
 	return { kind: "skipped", reason: result.error ?? "skipped after failed validation" };
 }
 
-function buildPrompt(base: string, validationErrors: string[]): string {
+function buildPromptBase(base: string, schema: TSchema): string {
+	return [
+		base,
+		"",
+		"Output must be valid JSON matching EXACTLY this JSON schema (all required properties present, no extra properties):",
+		JSON.stringify(schema),
+	].join("\n");
+}
+
+function appendValidationErrors(base: string, validationErrors: string[]): string {
 	if (validationErrors.length === 0) {
 		return base;
 	}
 	return `${base}\n\nYour previous output failed validation. Fix the JSON and return it only:\n${validationErrors
 		.map((entry) => `- ${entry}`)
 		.join("\n")}`;
+}
+
+function toErrorMessage(error: unknown): string {
+	return error instanceof Error ? error.message : String(error);
 }
 
 function parseJsonStrict(text: string): unknown {
