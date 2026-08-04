@@ -92,6 +92,13 @@ export {
 	type OptimizerInput,
 	optimizerStage,
 } from "./optimizer.ts";
+export {
+	renderPlanDag,
+	renderPlanHead,
+	renderPlanView,
+	renderRevisionHistory,
+	renderTaskList,
+} from "./plan-view.ts";
 export { downgradePolicy, type PolicyDowngrade } from "./policy.ts";
 export {
 	DEFAULT_STAGE_MODEL_ROUTING,
@@ -122,6 +129,27 @@ export {
 } from "./task-decomposition.ts";
 export { completeTasks, type DecomposedTask, dedupeTasks, enforceMaxTasks } from "./tasks.ts";
 export { type CreateDraftPlanInput, createDraftPlanStage } from "./trivial.ts";
+export {
+	applyPlanEdit,
+	applyPlanEdits,
+	type PlanEdit,
+	parsePlanEdit,
+	type TaskRef,
+	type UserEditInput,
+	userEditStage,
+} from "./user-edit.ts";
+export {
+	appendPlanRevision,
+	approvePlan,
+	autoApprovePlan,
+	evaluateReviewGate,
+	nextPlanVersion,
+	type ReviewGateAction,
+	type ReviewGateDecision,
+	type ReviewGateInput,
+	requestReview,
+	reviewGateStage,
+} from "./user-review.ts";
 export {
 	type PlanValidationResult,
 	type ValidationIssue,

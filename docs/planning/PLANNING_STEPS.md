@@ -254,6 +254,30 @@ tests green; repo `npm run check` green.
 
 ---
 
+## Step 2.11 — User Review / approval gate — DONE
+
+**Report:** `docs/planning/PLAN_USER_REVIEW_REPORT.md` · **Design:** `docs/planning/PLAN_USER_REVIEW_DESIGN.md`
+
+**Implemented:** the deterministic User Review / approval gate + schema-preserving
+`user_edit` + plan view (`packages/platform/src/planning/user-review.ts` +
+`user-edit.ts` + `plan-view.ts`): `evaluateReviewGate` honors `policy.requireApproval`
+(default true for `planningDepth ≥ medium`); `requestReview` moves `draft →
+needs_review`; `approvePlan` flips `needs_review → approved` recording an `approval`
+revision (§8); `autoApprovePlan` skips the gate for waived policies; the
+`orchestration.plan.review` capability persists and emits `plan.approved` (and never
+force-approves a still-draft plan under a required gate). `applyPlanEdit`/
+`parsePlanEdit` implement eight schema-preserving, DAG- + schema-guarded edit ops
+(rename/repurpose/add_dependency/remove_dependency/merge/split/add_constraint/set_policy)
+behind the `orchestration.plan.edit` capability, each bumping a `user_edit` revision
+with the changed task ids (cycle-inducing edits are rejected; `repurpose` rewires
+downstream inputs; `merge` rewires dependents; `split` derives part ids).
+`renderPlanView`/`renderPlanDag` deterministically render the reviewable plan
+(including the indented DAG outline via 2.10 `analyzeDag`) — the shared view source
+for on-disk review and the TUI plan view (widget wiring is 2.12). 30 unit tests
+green; repo `npm run check` green.
+
+---
+
 ## Step 2.2 — Plan store + scope + persistence
 
 **Arch refs:** §8 (versioning), §15 (where the plan lives: session/project/user

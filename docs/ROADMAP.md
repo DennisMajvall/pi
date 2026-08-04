@@ -59,9 +59,9 @@ Detailed substeps and per-step decisions live in
 - [x] Step 2.10 — Plan Validation + Metrics (deterministic schema/DAG/coverage +
       AI-assessed score)
       (`docs/planning/PLAN_VALIDATION_METRICS_DESIGN.md` / `PLAN_VALIDATION_METRICS_REPORT.md`)
-- [ ] Step 2.11 — User Review / approval gate (status transitions; schema-
+- [x] Step 2.11 — User Review / approval gate (status transitions; schema-
       preserving `user_edit`; on-disk + dedicated TUI plan view, editable via
-      prompts)
+      prompts) (`docs/planning/PLAN_USER_REVIEW_DESIGN.md` / `PLAN_USER_REVIEW_REPORT.md`)
 - [ ] Step 2.12 — **Planning complete**: deterministic scheduler + execution
       overlay (plan content vs state split); hybrid trigger (`/plan` + complexity
       auto-engage via deterministic pre-filter + cheap-model AI judgment);
@@ -135,8 +135,19 @@ Detailed substeps and per-step decisions live in
   `validatePlan` (schema / re-run acyclicity / coverage — reachable criteria, task
   purposes, no duplicate deliverables) and the Planning Metrics (DAG-derived
   `parallelism` via `analyzeDag`/`computeParallelism`, the optional non-mutating AI
-  `metricsStage`, and `combineMetrics` onto the §14 `Metrics` set on the plan).
-  164 unit tests green, repo check green. Next: User Review / approval gate (Step 2.11).
+  `metricsStage`, and `combineMetrics` onto the §14 `Metrics` set on the plan)
+  — plus Step 2.11's User Review / approval gate: the deterministic gate
+  (`evaluateReviewGate` honors `policy.requireApproval`, default true for medium+),
+  the `needs_review → approved` transition recording an `approval` revision, the
+  `autoApprovePlan` path for waived policies and the `orchestration.plan.review`
+  capability (emits `plan.approved`); the schema-preserving `user_edit` engine
+  (`applyPlanEdit`/`parsePlanEdit`, ops rename/repurpose/add_dependency/remove_dependency/merge/split/
+  add_constraint/set_policy, each DAG- + schema-guarded and bumping a `user_edit`
+  revision) behind the `orchestration.plan.edit` capability; and the deterministic
+  plan view (`renderPlanView`/`renderPlanDag`, the TUI's shared view source).
+  194 unit tests green, repo check green. Next: the minimal deterministic
+  scheduler + execution overlay + end-to-end request→approved plan, which wires
+  the orchestrator, real model routing, and the TUI plan view surface (Step 2.12).
 - Step cadence: one capability or service per step. Every step's report ends
   with a "Recommended Next Step" section that picks the next cheapest
   validation, grounded in the design docs — this is how steps 1.3–1.10 were
