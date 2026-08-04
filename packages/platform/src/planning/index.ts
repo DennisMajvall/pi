@@ -2,11 +2,12 @@
  * @earendil-works/pi-platform/planning
  *
  * Implementation of the generic planning-stage pattern (Step 2.3)
- * and the first AI stages + deterministic gates (Steps 2.4–2.5):
+ * and the AI stages + deterministic folds (Steps 2.4–2.6):
  * the stage contract + strict-JSON runner + per-stage model routing, the
  * planning event surface, the stage-as-`orchestration`-capability wrapper,
  * Goal Analysis (cheap-model routed), the deterministic Clarification Gate,
- * Execution Strategy Selection, and the policy guard hook.
+ * Execution Strategy Selection, the policy guard hook, and Constraint
+ * Extraction with the deterministic policy-downgrade fold.
  * Exposed via the subpath only (implementation, like /kernel).
  */
 
@@ -16,6 +17,20 @@ export {
 	DEFAULT_MAX_CLARIFICATION_ROUNDS,
 	runClarificationGate,
 } from "./clarification-gate.ts";
+export {
+	CONSTRAINT_EXTRACTION_MODEL_KEY,
+	CONSTRAINT_EXTRACTION_SYSTEM_PROMPT,
+	type ConstraintExtractionInput,
+	ConstraintExtractionSchema,
+	constraintExtractionStage,
+	type RuntimeConstraintContext,
+} from "./constraint-extraction.ts";
+export {
+	applyConstraintDowngrade,
+	type ConstraintFamilies,
+	foldConstraints,
+	policyDowngradeFromConstraints,
+} from "./constraints.ts";
 export {
 	EVENT_PLAN_APPROVED,
 	EVENT_PLAN_COMPLETED,

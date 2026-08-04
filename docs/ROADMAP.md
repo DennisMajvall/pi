@@ -46,7 +46,8 @@ Detailed substeps and per-step decisions live in
       (`docs/planning/GOAL_ANALYSIS_DESIGN.md` / `GOAL_ANALYSIS_REPORT.md`)
 - [x] Step 2.5 — Execution Strategy Selection (first-class; emits `PlanningPolicy`)
       (`docs/planning/EXECUTION_STRATEGY_DESIGN.md` / `EXECUTION_STRATEGY_REPORT.md`)
-- [ ] Step 2.6 — Constraint Extraction (deterministic policy-downgrade rule)
+- [x] Step 2.6 — Constraint Extraction (deterministic policy-downgrade rule)
+      (`docs/planning/CONSTRAINT_EXTRACTION_DESIGN.md` / `CONSTRAINT_EXTRACTION_REPORT.md`)
 - [ ] Step 2.7 — Task Decomposition (unordered tasks + dedupe pass)
 - [ ] Step 2.8 — Dependency Builder (deterministic rules + bounded AI fallback;
       acyclicity check → DAG)
@@ -107,7 +108,7 @@ Detailed substeps and per-step decisions live in
   driven by a per-tool spec table, and the manifests' `provides.tool` prose
   is sourced from the tool templates (a fixture pins manifest↔tool equality).
   Next: Planning (`docs/PLANNING_ARCHITECTURE.md`).
-- Current position (Planning): Steps 2.1–2.5 complete — the canonical Plan object
+- Current position (Planning): Steps 2.1–2.6 complete — the canonical Plan object
   (Goal/Assumption/Constraint/Task/PlanningPolicy/Revision/Plan/Metrics +
   status & revision-reason enums) is a validated TypeBox schema in
   `@earendil-works/pi-platform` (`/plan` subpath); a `PlanStore` (`/kernel`) owns
@@ -116,12 +117,14 @@ Detailed substeps and per-step decisions live in
   re-store; a `/planning` subpath establishes the generic stage pattern (stage
   contract + §11 strict-JSON runner, per-stage model routing independent of the
   session model, stages as `orchestration` capabilities, the planning event
-  surface, one trivial stage end-to-end); and two real AI stages — Goal
-  Analysis (`orchestration.goal.analysis`, cheap-model routed, strict `Goal`
-  JSON) and Execution Strategy Selection (`orchestration.strategy`, strict
-  `PlanningPolicy` JSON stored on the plan) — plus the deterministic §9
-  Clarification Gate and the never-upgrades policy guard hook (§7). 54 unit
-  tests green, repo check green. Next: Constraint Extraction (Step 2.6).
+  surface, one trivial stage end-to-end); and the AI stages + deterministic
+  folds — Goal Analysis (`orchestration.goal.analysis`, cheap-model routed),
+  Execution Strategy Selection (`orchestration.strategy`, strict `PlanningPolicy`
+  JSON stored on the plan), Constraint Extraction (`orchestration.constraints`, four
+  families folded onto `Plan.constraints`) — plus the deterministic §9
+  Clarification Gate, the never-upgrades policy guard hook (§7), and the
+  constraint-driven downgrade rule. 62 unit tests green, repo check green. Next:
+  Task Decomposition (Step 2.7).
 - Step cadence: one capability or service per step. Every step's report ends
   with a "Recommended Next Step" section that picks the next cheapest
   validation, grounded in the design docs — this is how steps 1.3–1.10 were

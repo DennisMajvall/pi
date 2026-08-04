@@ -155,6 +155,26 @@ only forces approval (§7). 7 unit tests green; repo `npm run check` green.
 **Recommended next step:** Constraint Extraction, which can deterministically downgrade
 policy (2.6).
 
+## Step 2.6 — Constraint Extraction — DONE
+
+**Report:** `docs/planning/CONSTRAINT_EXTRACTION_REPORT.md` · **Design:** `docs/planning/CONSTRAINT_EXTRACTION_DESIGN.md`
+
+**Implemented:** Constraint Extraction
+(`packages/platform/src/planning/constraint-extraction.ts`): `constraintExtractionStage`
+is an `orchestration` capability (`orchestration.constraints`) emitting the four
+families (`hard`/`soft`/`resource`/`policy`) against `ConstraintExtractionSchema`,
+routed via the `constraint_extraction` model key through the §11 runner (mandatory),
+inputting the Goal + a `RuntimeConstraintContext`. The deterministic fold
+(`packages/platform/src/planning/constraints.ts`) turns the families onto
+`Plan.constraints` and derives the policy downgrade via the 2.5 guard hook
+(`foldConstraints` / `policyDowngradeFromConstraints` / `applyConstraintDowngrade`):
+hard/resource limits cap `planningDepth`, disable `parallelExecution`/specialists/
+dual-planner, or force `requireApproval` — never upgrade (§7). 8 unit tests green;
+repo `npm run check` green.
+
+**Arch refs:** §6.3.3, §7 (deterministic downgrade rule: hard limits cap policy, never upgrade).
+**Recommended next step:** Task Decomposition (2.7).
+
 ---
 
 ## Step 2.2 — Plan store + scope + persistence
