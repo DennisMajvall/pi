@@ -26,7 +26,6 @@ import type {
 } from "@earendil-works/pi-platform/capability";
 import { capabilityId, capabilityVersion } from "@earendil-works/pi-platform/identifier";
 import type { BuiltinCapability } from "@earendil-works/pi-platform/kernel";
-import type { ExtensionContext } from "../core/extensions/types.ts";
 import {
 	createGrepToolDefinition,
 	type GrepOperations,
@@ -35,6 +34,7 @@ import {
 	type GrepToolInput,
 	grepSchema,
 } from "../core/tools/grep.ts";
+import { executePlatformTool } from "./tool-execution.ts";
 
 const GREP_CAPABILITY_ID = capabilityId("tool.grep");
 const READ_CAPABILITY_ID = capabilityId("tool.read");
@@ -122,22 +122,7 @@ export const grepCapability: BuiltinCapability = {
 					};
 
 					const definition = createGrepToolDefinition(toolCtx.cwd, { operations });
-					try {
-						const output = await definition.execute(
-							"platform-grep",
-							args as GrepToolInput,
-							toolCtx.signal,
-							undefined,
-							undefined as unknown as ExtensionContext,
-						);
-						return { success: true, output };
-					} catch (error) {
-						return {
-							success: false,
-							isError: true,
-							error: error instanceof Error ? error.message : String(error),
-						};
-					}
+					return executePlatformTool(definition, "platform-grep", args as GrepToolInput, toolCtx.signal);
 				},
 			};
 

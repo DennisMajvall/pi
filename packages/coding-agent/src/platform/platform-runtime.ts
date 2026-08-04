@@ -22,6 +22,8 @@ import { SessionManager } from "../core/session-manager.ts";
 import { SettingsManager } from "../core/settings-manager.ts";
 import type { BashToolDetails, BashToolInput } from "../core/tools/bash.ts";
 import { createBashToolDefinition } from "../core/tools/bash.ts";
+import type { EditToolDetails, EditToolInput } from "../core/tools/edit.ts";
+import { createEditToolDefinition } from "../core/tools/edit.ts";
 import type { FindToolDetails, FindToolInput } from "../core/tools/find.ts";
 import { createFindToolDefinition } from "../core/tools/find.ts";
 import type { GrepToolDetails, GrepToolInput } from "../core/tools/grep.ts";
@@ -30,19 +32,25 @@ import type { LsToolDetails, LsToolInput } from "../core/tools/ls.ts";
 import { createLsToolDefinition } from "../core/tools/ls.ts";
 import type { ReadRenderArgs } from "../core/tools/read.ts";
 import { type ReadToolDetails, type ReadToolInput, renderReadCall, renderReadResult } from "../core/tools/read.ts";
+import type { WriteToolInput } from "../core/tools/write.ts";
+import { createWriteToolDefinition } from "../core/tools/write.ts";
 import { bashCapability } from "./bash-capability.ts";
+import { editCapability } from "./edit-capability.ts";
 import { findCapability } from "./find-capability.ts";
 import { grepCapability } from "./grep-capability.ts";
 import { lsCapability } from "./ls-capability.ts";
 import { readCapability } from "./read-capability.ts";
 import { SessionManagerService } from "./session-service.ts";
 import { SettingsManagerService } from "./settings-service.ts";
+import { writeCapability } from "./write-capability.ts";
 
 const READ_CAPABILITY_ID = capabilityId("tool.read");
 const BASH_CAPABILITY_ID = capabilityId("tool.bash");
 const GREP_CAPABILITY_ID = capabilityId("tool.grep");
 const FIND_CAPABILITY_ID = capabilityId("tool.find");
 const LS_CAPABILITY_ID = capabilityId("tool.ls");
+const WRITE_CAPABILITY_ID = capabilityId("tool.write");
+const EDIT_CAPABILITY_ID = capabilityId("tool.edit");
 
 let runtime: KernelRuntime | undefined;
 let bootPromise: Promise<KernelRuntime | undefined> | undefined;
@@ -71,7 +79,15 @@ async function bootPlatformRuntime(options: PlatformRuntimeOptions): Promise<Ker
 		const settings = new SettingsManagerService(options.settingsManager ?? SettingsManager.inMemory());
 		const session = new SessionManagerService(options.sessionManager ?? SessionManager.inMemory());
 		const kernel = createRuntime({
-			builtins: [readCapability, bashCapability, grepCapability, findCapability, lsCapability],
+			builtins: [
+				readCapability,
+				bashCapability,
+				grepCapability,
+				findCapability,
+				lsCapability,
+				writeCapability,
+				editCapability,
+			],
 			services: { workspaceRoot: process.cwd(), settings, session },
 		});
 		await kernel.initialize();
@@ -203,6 +219,48 @@ export function getPlatformLsToolDefinition(cwd: string, options: PlatformLsOpti
 	const context = kernel.capabilities.getContext(LS_CAPABILITY_ID);
 	if (!tool || !context) return undefined;
 	return buildLsToolDefinition(tool, context, cwd, options);
+}
+
+export interface PlatformWriteOptions {
+	sessionId?: string;
+}
+
+/**
+ * Build the AgentSession write ToolDefinition from the platform registry
+ * exports. Returns undefined when the kernel is not available, in which case
+ * callers fall back to the legacy definition.
+ */
+export function getPlatformWriteToolDefinition(
+	cwd: string,
+	options: PlatformWriteOptions = {},
+): ToolDefinition | undefined {
+	const kernel = getPlatformRuntime();
+	if (!kernel) return undefined;
+	const tool = kernel.capabilities.getExports<{ tool: ToolCapabilityExport }>(WRITE_CAPABILITY_ID)?.tool;
+	const context = kernel.capabilities.getContext(WRITE_CAPABILITY_ID);
+	if (!tool || !context) return undefined;
+	return buildWriteToolDefinition(tool, context, cwd, options);
+}
+
+export interface PlatformEditOptions {
+	sessionId?: string;
+}
+
+/**
+ * Build the AgentSession edit ToolDefinition from the platform registry
+ * exports. Returns undefined when the kernel is not available, in which case
+ * callers fall back to the legacy definition.
+ */
+export function getPlatformEditToolDefinition(
+	cwd: string,
+	options: PlatformEditOptions = {},
+): ToolDefinition | undefined {
+	const kernel = getPlatformRuntime();
+	if (!kernel) return undefined;
+	const tool = kernel.capabilities.getExports<{ tool: ToolCapabilityExport }>(EDIT_CAPABILITY_ID)?.tool;
+	const context = kernel.capabilities.getContext(EDIT_CAPABILITY_ID);
+	if (!tool || !context) return undefined;
+	return buildEditToolDefinition(tool, context, cwd, options);
 }
 
 // The adapter boundary sits between two contract systems (platform tool export
@@ -391,6 +449,79 @@ function buildLsToolDefinition(
 				throw new Error(result.error ?? "ls failed");
 			}
 			return result.output as unknown as AgentToolResult<LsToolDetails | undefined>;
+		},
+		renderCall: template.renderCall as unknown as ToolDefinition<any, any>["renderCall"],
+		renderResult: template.renderResult as unknown as ToolDefinition<any, any>["renderResult"],
+	};
+}
+
+// The write tool's renderers are object methods on the definition (never
+// extracted as module functions like read's); a template definition supplies
+// them to the platform-built definition without touching write.ts.
+function buildWriteToolDefinition(
+	tool: ToolCapabilityExport,
+	context: CapabilityContext,
+	cwd: string,
+	options: PlatformWriteOptions,
+): ToolDefinition<any, any> {
+	const template = createWriteToolDefinition("");
+	return {
+		name: tool.definition.name,
+		label: "write",
+		description: tool.definition.description,
+		promptSnippet: tool.definition.promptSnippet,
+		promptGuidelines: tool.definition.promptGuidelines,
+		parameters: tool.definition.parameters,
+		execute: async (_toolCallId, params, signal, _onUpdate, _extCtx) => {
+			const result = await tool.execute(params as WriteToolInput, {
+				capability: context,
+				signal: signal ?? new AbortController().signal,
+				sessionId: sessionId(options.sessionId ?? "unknown"),
+				cwd,
+				metadata: {},
+			});
+			if (!result.success) {
+				throw new Error(result.error ?? "write failed");
+			}
+			return result.output as unknown as AgentToolResult<undefined>;
+		},
+		renderCall: template.renderCall as unknown as ToolDefinition<any, any>["renderCall"],
+		renderResult: template.renderResult as unknown as ToolDefinition<any, any>["renderResult"],
+	};
+}
+
+// The edit tool's renderers, prepareArguments compatibility shim, and self
+// shell rendering are object members on the definition (never extracted as
+// module functions like read's); a template definition supplies them to the
+// platform-built definition without touching edit.ts.
+function buildEditToolDefinition(
+	tool: ToolCapabilityExport,
+	context: CapabilityContext,
+	cwd: string,
+	options: PlatformEditOptions,
+): ToolDefinition<any, any> {
+	const template = createEditToolDefinition("");
+	return {
+		name: tool.definition.name,
+		label: "edit",
+		description: tool.definition.description,
+		promptSnippet: tool.definition.promptSnippet,
+		promptGuidelines: tool.definition.promptGuidelines,
+		parameters: tool.definition.parameters,
+		prepareArguments: template.prepareArguments,
+		renderShell: template.renderShell,
+		execute: async (_toolCallId, params, signal, _onUpdate, _extCtx) => {
+			const result = await tool.execute(params as EditToolInput, {
+				capability: context,
+				signal: signal ?? new AbortController().signal,
+				sessionId: sessionId(options.sessionId ?? "unknown"),
+				cwd,
+				metadata: {},
+			});
+			if (!result.success) {
+				throw new Error(result.error ?? "edit failed");
+			}
+			return result.output as unknown as AgentToolResult<EditToolDetails | undefined>;
 		},
 		renderCall: template.renderCall as unknown as ToolDefinition<any, any>["renderCall"],
 		renderResult: template.renderResult as unknown as ToolDefinition<any, any>["renderResult"],

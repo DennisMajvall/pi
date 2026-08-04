@@ -41,7 +41,7 @@ const replaceEditSchema = Type.Object(
 	{},
 );
 
-const editSchema = Type.Object(
+export const editSchema = Type.Object(
 	{
 		path: Type.String({ description: "Path to the file to edit (relative or absolute)" }),
 		edits: Type.Array(replaceEditSchema, {

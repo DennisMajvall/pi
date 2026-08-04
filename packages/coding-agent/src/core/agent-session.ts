@@ -48,10 +48,12 @@ import {
 import { getThemeByName, theme } from "../modes/interactive/theme/theme.ts";
 import {
 	getPlatformBashToolDefinition,
+	getPlatformEditToolDefinition,
 	getPlatformFindToolDefinition,
 	getPlatformGrepToolDefinition,
 	getPlatformLsToolDefinition,
 	getPlatformReadToolDefinition,
+	getPlatformWriteToolDefinition,
 } from "../platform/platform-runtime.ts";
 import { stripFrontmatter } from "../utils/frontmatter.ts";
 import { resolvePath } from "../utils/paths.ts";
@@ -2606,6 +2608,18 @@ export class AgentSession {
 			});
 			if (platformLs) {
 				baseToolDefinitions.ls = platformLs;
+			}
+			const platformWrite = getPlatformWriteToolDefinition(this._cwd, {
+				sessionId: this.sessionManager.getSessionId(),
+			});
+			if (platformWrite) {
+				baseToolDefinitions.write = platformWrite;
+			}
+			const platformEdit = getPlatformEditToolDefinition(this._cwd, {
+				sessionId: this.sessionManager.getSessionId(),
+			});
+			if (platformEdit) {
+				baseToolDefinitions.edit = platformEdit;
 			}
 		}
 

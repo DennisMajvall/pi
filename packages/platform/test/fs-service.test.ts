@@ -9,7 +9,6 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { PlatformError } from "../src/error/index.ts";
 import { NodeFileSystemService } from "../src/kernel/fs-service.ts";
 import type { FileStat } from "../src/service/index.ts";
 
@@ -176,19 +175,79 @@ describe("NodeFileSystemService list", () => {
 });
 
 describe("NodeFileSystemService write surface", () => {
-	it("throws NOT_IMPLEMENTED for write/append/delete/mkdir/copy/move/watch", async () => {
+	it("writes a file with string content and overwrites it", async () => {
+		const { root, service } = makeWorkspace();
+		await service.write("new.txt", "hello");
+		expect(await service.read("new.txt")).toBe("hello");
+		await service.write("new.txt", "world");
+		expect(await service.read("new.txt")).toBe("world");
+		expect(await service.exists(join(root, "new.txt"))).toBe(true);
+	});
+
+	it("writes binary content as bytes", async () => {
 		const { service } = makeWorkspace();
-		for (const call of [
-			service.write("x", "y"),
-			service.append("x", "y"),
-			service.delete("x"),
-			service.mkdir("x"),
-			service.copy("a", "b"),
-			service.move("a", "b"),
-		]) {
-			await expect(call).rejects.toThrow(PlatformError);
-			await expect(call).rejects.toThrow(/not implemented/i);
-		}
+		const bytes = new Uint8Array([0x00, 0xff, 0x10]);
+		await service.write("bin.dat", bytes);
+		const read = await service.readBytes("bin.dat");
+		expect(read).toEqual(Buffer.from(bytes));
+	});
+
+	it("creates parent directories with createDirs", async () => {
+		const { root, service } = makeWorkspace();
+		await service.write(join(root, "nested", "deep", "f.txt"), "x", { createDirs: true });
+		expect(await service.read(join(root, "nested", "deep", "f.txt"))).toBe("x");
+	});
+
+	it("appends to an existing file and creates a missing one", async () => {
+		const { service } = makeWorkspace();
+		await service.write("log.txt", "a");
+		await service.append("log.txt", "b");
+		expect(await service.read("log.txt")).toBe("ab");
+		await service.append("fresh.txt", "x");
+		expect(await service.read("fresh.txt")).toBe("x");
+	});
+
+	it("deletes files and directories (recursive), honoring force", async () => {
+		const { service } = makeWorkspace();
+		await service.delete("a.ts");
+		expect(await service.exists("a.ts")).toBe(false);
+		await service.delete("src", { recursive: true });
+		expect(await service.exists("src")).toBe(false);
+		await expect(service.delete("missing.ts")).rejects.toThrow();
+		await service.delete("missing.ts", { force: true });
+	});
+
+	it("mkdir creates directories, nested with recursive", async () => {
+		const { service } = makeWorkspace();
+		await service.mkdir("alpha");
+		expect(await service.exists("alpha")).toBe(true);
+		await expect(service.mkdir("alpha/beta/gamma")).rejects.toThrow();
+		await service.mkdir("alpha/beta/gamma", { recursive: true });
+		expect(await service.exists("alpha/beta/gamma")).toBe(true);
+	});
+
+	it("copies files (and trees) with overwrite semantics", async () => {
+		const { service } = makeWorkspace();
+		await service.copy("a.ts", "a-copy.ts");
+		expect(await service.exists("a-copy.ts")).toBe(true);
+		// No overwrite by default: copying onto an existing dest throws.
+		await expect(service.copy("b.ts", "a-copy.ts")).rejects.toThrow();
+		await service.copy("b.ts", "a-copy.ts", { overwrite: true });
+		expect(await service.read("a-copy.ts")).toBe("");
+		await service.copy("src", "src-copy");
+		expect(await service.exists("src-copy/c.ts")).toBe(true);
+		expect(await service.exists("src-copy/deep/d.ts")).toBe(true);
+	});
+
+	it("moves a file to a new location", async () => {
+		const { service } = makeWorkspace();
+		await service.move("a.ts", "moved.ts");
+		expect(await service.exists("a.ts")).toBe(false);
+		expect(await service.exists("moved.ts")).toBe(true);
+	});
+
+	it("keeps watch as NOT_IMPLEMENTED (event-system step)", async () => {
+		const { service } = makeWorkspace();
 		expect(() => service.watch("x", { onChange: () => {} })).toThrow(/not implemented/i);
 	});
 });

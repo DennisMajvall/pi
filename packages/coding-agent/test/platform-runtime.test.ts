@@ -4,7 +4,7 @@
  * consumable by existing coding-agent tool paths.
  */
 
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ToolCapabilityExport } from "@earendil-works/pi-platform/capability";
@@ -18,10 +18,12 @@ import { SessionManager } from "../src/core/session-manager.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
 import {
 	ensurePlatformRuntime,
+	getPlatformEditToolDefinition,
 	getPlatformFindToolDefinition,
 	getPlatformLsToolDefinition,
 	getPlatformReadToolDefinition,
 	getPlatformRuntime,
+	getPlatformWriteToolDefinition,
 	shutdownPlatformRuntime,
 } from "../src/platform/platform-runtime.ts";
 import { readCapability } from "../src/platform/read-capability.ts";
@@ -283,5 +285,46 @@ describe("coding-agent consumption adapter", () => {
 		);
 		const text = (result.content as Array<{ type: string; text?: string }>).map((p) => p.text ?? "").join("");
 		expect(text).toContain("entry.txt");
+	});
+
+	it("builds a working AgentSession write ToolDefinition from registry exports", async () => {
+		await ensurePlatformRuntime();
+		const dir = makeTempDir();
+
+		const definition = getPlatformWriteToolDefinition(dir, { sessionId: "test" });
+		expect(definition).toBeDefined();
+		expect(definition?.name).toBe("write");
+
+		const result = await definition!.execute(
+			"call-write-1",
+			{ path: join(dir, "out.txt"), content: "platform write" },
+			undefined,
+			undefined,
+			undefined as unknown as ExtensionContext,
+		);
+		const text = (result.content as Array<{ type: string; text?: string }>).map((p) => p.text ?? "").join("");
+		expect(text).toContain("Successfully wrote");
+		expect(readFileSync(join(dir, "out.txt"), "utf-8")).toBe("platform write");
+	});
+
+	it("builds a working AgentSession edit ToolDefinition from registry exports", async () => {
+		await ensurePlatformRuntime();
+		const dir = makeTempDir();
+		writeFileSync(join(dir, "target.txt"), "before edit");
+
+		const definition = getPlatformEditToolDefinition(dir, { sessionId: "test" });
+		expect(definition).toBeDefined();
+		expect(definition?.name).toBe("edit");
+
+		const result = await definition!.execute(
+			"call-edit-1",
+			{ path: join(dir, "target.txt"), edits: [{ oldText: "before edit", newText: "after edit" }] },
+			undefined,
+			undefined,
+			undefined as unknown as ExtensionContext,
+		);
+		const text = (result.content as Array<{ type: string; text?: string }>).map((p) => p.text ?? "").join("");
+		expect(text).toContain("Successfully replaced 1 block(s)");
+		expect(readFileSync(join(dir, "target.txt"), "utf-8")).toBe("after edit");
 	});
 });

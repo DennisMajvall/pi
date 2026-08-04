@@ -25,8 +25,8 @@ import { capabilityId, capabilityVersion } from "@earendil-works/pi-platform/ide
 import type { BuiltinCapability } from "@earendil-works/pi-platform/kernel";
 import type { FileSystemService } from "@earendil-works/pi-platform/service";
 import nodePath from "path";
-import type { ExtensionContext } from "../core/extensions/types.ts";
 import { createFindToolDefinition, type FindOperations, type FindToolInput, findSchema } from "../core/tools/find.ts";
+import { executePlatformTool } from "./tool-execution.ts";
 
 const FIND_CAPABILITY_ID = capabilityId("tool.find");
 
@@ -86,22 +86,7 @@ export const findCapability: BuiltinCapability = {
 					const operations = createFileSystemServiceFindOperations(toolCtx.capability.fs);
 
 					const definition = createFindToolDefinition(toolCtx.cwd, { operations });
-					try {
-						const output = await definition.execute(
-							"platform-find",
-							args as FindToolInput,
-							toolCtx.signal,
-							undefined,
-							undefined as unknown as ExtensionContext,
-						);
-						return { success: true, output };
-					} catch (error) {
-						return {
-							success: false,
-							isError: true,
-							error: error instanceof Error ? error.message : String(error),
-						};
-					}
+					return executePlatformTool(definition, "platform-find", args as FindToolInput, toolCtx.signal);
 				},
 			};
 

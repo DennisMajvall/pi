@@ -17,8 +17,8 @@ import type { CapabilityManifest, ToolCapabilityExport } from "@earendil-works/p
 import { capabilityId, capabilityVersion } from "@earendil-works/pi-platform/identifier";
 import type { BuiltinCapability } from "@earendil-works/pi-platform/kernel";
 import type { FileSystemService } from "@earendil-works/pi-platform/service";
-import type { ExtensionContext } from "../core/extensions/types.ts";
 import { createLsToolDefinition, type LsOperations, type LsToolInput, lsSchema } from "../core/tools/ls.ts";
+import { executePlatformTool } from "./tool-execution.ts";
 
 const LS_CAPABILITY_ID = capabilityId("tool.ls");
 
@@ -75,22 +75,7 @@ export const lsCapability: BuiltinCapability = {
 					const operations = createFileSystemServiceLsOperations(toolCtx.capability.fs);
 
 					const definition = createLsToolDefinition(toolCtx.cwd, { operations });
-					try {
-						const output = await definition.execute(
-							"platform-ls",
-							args as LsToolInput,
-							toolCtx.signal,
-							undefined,
-							undefined as unknown as ExtensionContext,
-						);
-						return { success: true, output };
-					} catch (error) {
-						return {
-							success: false,
-							isError: true,
-							error: error instanceof Error ? error.message : String(error),
-						};
-					}
+					return executePlatformTool(definition, "platform-ls", args as LsToolInput, toolCtx.signal);
 				},
 			};
 

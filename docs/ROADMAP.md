@@ -20,8 +20,7 @@ Workers → **Memory** (features-to-implement #4)
 - [x] Step 1.6 — SettingsService
 - [x] Step 1.7 — SessionService
 - [x] Step 1.8 — find/ls + grep search seam (read-only tool set complete)
-- [ ] Step 1.9 — Remaining platform pieces (decided step by step; candidates:
-      write/edit migration, permission enforcement, event replay)
+- [x] Step 1.9 — write/edit migration (fs write surface + first write permission; shared tool-execution helper)
 - [ ] Step 1.10 — **Capability Platform complete** (gate: the platform is the
       default execution path for all builtin tools, not a silent fallback)
 
@@ -48,14 +47,16 @@ Workers → **Memory** (features-to-implement #4)
 
 ## Notes
 
-- Current position: Step 1.8 (find/ls + the grep search seam) is complete —
-  the read-only tool set (read/bash/grep/find/ls) is migratable to the
-  platform, `fs.glob`/`fs.list` are real (minimatch), and the ripgrep search
-  runs behind `ProcessService`. Next: Step 1.9 (write/edit migration — the
-  last builtin tools on the legacy path), then the Step 1.10 gate.
+- Current position: Step 1.9 (write/edit migration) is complete — the
+  builtin tool surface (read/bash/grep/find/ls/write/edit) is migratable to
+  the platform, `fs` covers both sides (minimatch glob/list + the write
+  surface), the platform ships its first non-read permission
+  (`permissions: { fs: "write" }`), and the adapters share one
+  per-execution execution helper. Next: the Step 1.10 gate (platform as the
+  default execution path instead of a silent fallback).
 - Step cadence: one capability or service per step. Every step's report ends
   with a "Recommended Next Step" section that picks the next cheapest
-  validation, grounded in the design docs — this is how steps 1.3–1.8 were
+  validation, grounded in the design docs — this is how steps 1.3–1.9 were
   chosen (each report named the next one in advance), not improvised.
 - Sub-steps between features are not pre-planned; they are decided when a
   feature starts (the platform steps 1.7–1.10 above are the current view and

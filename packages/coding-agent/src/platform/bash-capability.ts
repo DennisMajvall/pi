@@ -29,6 +29,7 @@ import {
 } from "../core/tools/bash.ts";
 import { normalizePath } from "../utils/paths.ts";
 import { getShellConfig, getShellEnv, trackDetachedChildPid, untrackDetachedChildPid } from "../utils/shell.ts";
+import { executePlatformTool } from "./tool-execution.ts";
 
 const BASH_CAPABILITY_ID = capabilityId("tool.bash");
 
@@ -106,22 +107,10 @@ export const bashCapability: BuiltinCapability = {
 						commandPrefix,
 						shellPath,
 					});
-					try {
-						const output = await definition.execute(
-							"platform-bash",
-							args as BashToolInput,
-							toolCtx.signal,
-							onUpdate,
-							extensionContext as unknown as ExtensionContext,
-						);
-						return { success: true, output };
-					} catch (error) {
-						return {
-							success: false,
-							isError: true,
-							error: error instanceof Error ? error.message : String(error),
-						};
-					}
+					return executePlatformTool(definition, "platform-bash", args as BashToolInput, toolCtx.signal, {
+						extensionContext: extensionContext as unknown as ExtensionContext,
+						onUpdate,
+					});
 				},
 			};
 

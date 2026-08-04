@@ -217,6 +217,41 @@ describe("kernel: walking skeleton pipeline", () => {
 		}
 	});
 
+	it("exposes the write surface through the capability context (real fs service)", async () => {
+		const dir = mkdtempSync(join(tmpdir(), "pi-kernel-write-"));
+		try {
+			const fsWrite: BuiltinCapability = {
+				manifest: manifest("tool.fswrite", []),
+				factory: async (ctx) => ({
+					async init() {
+						await ctx.fs.mkdir("nested", { recursive: true });
+						await ctx.fs.write("nested/note.md", "hello");
+						await ctx.fs.append("nested/note.md", " world");
+						return {
+							readBack: await ctx.fs.read("nested/note.md"),
+							listed: (await ctx.fs.list("nested", { recursive: true })).map((s) => s.name),
+						};
+					},
+					async shutdown() {},
+				}),
+			};
+			runtime = createRuntime({
+				builtins: [fsWrite],
+				services: { workspaceRoot: dir },
+			});
+			await runtime.initialize();
+			await runtime.start();
+
+			const exports = runtime.capabilities.getExports<{ readBack: string; listed: string[] }>(
+				capabilityId("tool.fswrite"),
+			);
+			expect(exports?.readBack).toBe("hello world");
+			expect(exports?.listed).toContain("note.md");
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
 	it("reports missing dependencies without crashing", async () => {
 		runtime = await boot([fixtureCapability("tool.orphan", [capabilityId("tool.ghost")], [], [])]);
 		expect(runtime.capabilities.get(capabilityId("tool.orphan"))?.state).toBe(CapabilityState.Ready);

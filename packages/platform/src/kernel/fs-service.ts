@@ -2,10 +2,12 @@
  * Walking-skeleton FileSystemService.
  *
  * A thin wrapper over node:fs for the methods the pilot capabilities need:
- * read / readBytes / exists / stat / resolve / getWorkspaceRoot, plus (Step
- * 1.8) the read-side directory operations list / glob that the find and ls
- * tools consume. The write surface (write / append / delete / mkdir / copy /
- * move / watch) still throws "not implemented".
+ * read / readBytes / exists / stat / resolve / getWorkspaceRoot, the (Step
+ * 1.8) read-side directory operations list / glob that the find and ls
+ * tools consume, and the (Step 1.9) write surface write / append / delete /
+ * mkdir / copy / move that the write and edit tools consume. Only watch
+ * still throws "not implemented" — the event system is a later roadmap
+ * feature, not an fs-service concern.
  *
  * This service delegates to node:fs directly — the same filesystem the read
  * tool already used — so behaviour is unchanged while the injection point is
@@ -20,8 +22,19 @@
  */
 
 import type { Dirent, Stats } from "node:fs";
-import { access as fsAccess, readdir as fsReaddir, readFile as fsReadFile, stat as fsStat } from "node:fs/promises";
-import { isAbsolute, join, relative as relativePath, resolve as resolvePath, sep } from "node:path";
+import {
+	access as fsAccess,
+	appendFile as fsAppendFile,
+	cp as fsCp,
+	mkdir as fsMkdir,
+	readdir as fsReaddir,
+	readFile as fsReadFile,
+	rename as fsRename,
+	rm as fsRm,
+	stat as fsStat,
+	writeFile as fsWriteFile,
+} from "node:fs/promises";
+import { dirname, isAbsolute, join, relative as relativePath, resolve as resolvePath, sep } from "node:path";
 import { minimatch } from "minimatch";
 import { PlatformError } from "../error/index.ts";
 import type {
@@ -228,28 +241,53 @@ export class NodeFileSystemService implements FileSystemService {
 		return options.absolute || absolutePattern ? results.map((entry) => this.resolve(entry)) : results;
 	}
 
-	async write(_path: string, _content: string | Uint8Array, _options?: WriteOptions): Promise<void> {
-		notImplemented("write");
+	async write(path: string, content: string | Uint8Array, options?: WriteOptions): Promise<void> {
+		const resolved = this.resolve(path);
+		if (options?.createDirs) {
+			await fsMkdir(dirname(resolved), { recursive: true });
+		}
+		const writeOptions: Record<string, unknown> = {};
+		if (typeof content === "string") {
+			writeOptions.encoding = options?.encoding ?? "utf8";
+		}
+		if (options?.mode !== undefined) {
+			writeOptions.mode = options.mode;
+		}
+		await fsWriteFile(resolved, content, writeOptions);
 	}
 
-	async append(_path: string, _content: string): Promise<void> {
-		notImplemented("append");
+	async append(path: string, content: string): Promise<void> {
+		await fsAppendFile(this.resolve(path), content, "utf-8");
 	}
 
-	async delete(_path: string, _options?: DeleteOptions): Promise<void> {
-		notImplemented("delete");
+	async delete(path: string, options?: DeleteOptions): Promise<void> {
+		await fsRm(this.resolve(path), {
+			recursive: options?.recursive ?? false,
+			force: options?.force ?? false,
+		});
 	}
 
-	async mkdir(_path: string, _options?: MkdirOptions): Promise<void> {
-		notImplemented("mkdir");
+	async mkdir(path: string, options?: MkdirOptions): Promise<void> {
+		await fsMkdir(this.resolve(path), {
+			recursive: options?.recursive ?? false,
+			mode: options?.mode,
+		});
 	}
 
-	async copy(_source: string, _dest: string, _options?: CopyOptions): Promise<void> {
-		notImplemented("copy");
+	async copy(source: string, dest: string, options?: CopyOptions): Promise<void> {
+		const overwrite = options?.overwrite ?? false;
+		await fsCp(this.resolve(source), this.resolve(dest), {
+			recursive: true,
+			force: overwrite,
+			// With force: false node silently ignores an existing dest; errorOnExist
+			// turns the no-clobber default into a loud error.
+			errorOnExist: !overwrite,
+			preserveTimestamps: options?.preserveTimestamps ?? false,
+		});
 	}
 
-	async move(_source: string, _dest: string): Promise<void> {
-		notImplemented("move");
+	async move(source: string, dest: string): Promise<void> {
+		await fsRename(this.resolve(source), this.resolve(dest));
 	}
 
 	watch(_path: string, _listener: WatchListener): WatchHandle {

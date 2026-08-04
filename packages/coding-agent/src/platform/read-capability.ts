@@ -19,6 +19,7 @@ import type { BuiltinCapability } from "@earendil-works/pi-platform/kernel";
 import type { ExtensionContext } from "../core/extensions/types.ts";
 import { createReadToolDefinition, type ReadOperations, type ReadToolInput, readSchema } from "../core/tools/read.ts";
 import { detectSupportedImageMimeTypeFromFile } from "../utils/mime.ts";
+import { executePlatformTool } from "./tool-execution.ts";
 
 const READ_CAPABILITY_ID = capabilityId("tool.read");
 
@@ -89,22 +90,9 @@ export const readCapability: BuiltinCapability = {
 
 					const definition = createReadToolDefinition(toolCtx.cwd, { operations, autoResizeImages });
 					const extensionContext = (model ? { model } : undefined) as unknown as ExtensionContext;
-					try {
-						const output = await definition.execute(
-							"platform-read",
-							args as ReadToolInput,
-							toolCtx.signal,
-							undefined,
-							extensionContext,
-						);
-						return { success: true, output };
-					} catch (error) {
-						return {
-							success: false,
-							isError: true,
-							error: error instanceof Error ? error.message : String(error),
-						};
-					}
+					return executePlatformTool(definition, "platform-read", args as ReadToolInput, toolCtx.signal, {
+						extensionContext,
+					});
 				},
 			};
 
