@@ -94,6 +94,26 @@ green.
 **Recommended next step:** the planning capability skeleton, so stages can read/write
 the store through the platform (2.3).
 
+## Step 2.3 — Planning capability skeleton + stage contract — DONE
+
+**Report:** `docs/planning/PLANNING_SKELETON_REPORT.md` · **Design:** `docs/planning/PLANNING_SKELETON_DESIGN.md`
+
+**Implemented:** the generic planning-stage pattern in
+`@earendil-works/pi-platform/planning` (`packages/platform/src/planning/`): stage
+contract (`systemPrompt` + `inputs` + `outputSchema`), the §11 shared strict-JSON
+runner (`runStrictJsonStage`: validate → one retry → skip-optional / abort-
+mandatory), per-stage model routing (`StageModelRouting`/`resolveStageModel`,
+independent of the session model), `definePlanningStageCapability` (stage as
+`orchestration` capability, requiring `fs`+`events`, store wired via
+`ctx.fs.getWorkspaceRoot()`), the planning event surface (`plan.created`/
+`approved`/`replanning`/`completed`), and one trivial non-AI stage
+(`orchestration.plan.create`) run end-to-end in a kernel runtime (persists via
+the store, emits `plan.created`). 8 unit tests green; repo `npm run check` green.
+
+**Arch refs:** §6.2 (stage contract), §11 (error containment), §16 (stages as
+`orchestration` capabilities, events).
+**Recommended next step:** the first real AI stage, Goal Analysis (2.4).
+
 ---
 
 ## Step 2.2 — Plan store + scope + persistence

@@ -36,10 +36,11 @@ Detailed substeps and per-step decisions live in
 - [x] Step 2.2 — Plan store: project/workspace-scoped on-disk JSON is the durable
       source of truth (not in-memory); read-through so external edits never drift
       (`docs/planning/PLAN_STORE_DESIGN.md` / `PLAN_STORE_REPORT.md`)
-- [ ] Step 2.3 — Planning capability skeleton: the generic stage contract
+- [x] Step 2.3 — Planning capability skeleton: the generic stage contract
       (systemPrompt + inputs + outputSchema; per-stage model routing), strict-JSON
       exec + retry + degrade path, and the planning event surface; one trivial
       stage end-to-end
+      (`docs/planning/PLANNING_SKELETON_DESIGN.md` / `PLANNING_SKELETON_REPORT.md`)
 - [ ] Step 2.4 — Goal Analysis stage (cheap purpose-chosen model) + deterministic
       Clarification Gate
 - [ ] Step 2.5 — Execution Strategy Selection (first-class; emits `PlanningPolicy`)
@@ -104,16 +105,19 @@ Detailed substeps and per-step decisions live in
   driven by a per-tool spec table, and the manifests' `provides.tool` prose
   is sourced from the tool templates (a fixture pins manifest↔tool equality).
   Next: Planning (`docs/PLANNING_ARCHITECTURE.md`).
-- Current position (Planning): Steps 2.1–2.2 complete — the canonical Plan object
+- Current position (Planning): Steps 2.1–2.3 complete — the canonical Plan object
   (Goal/Assumption/Constraint/Task/PlanningPolicy/Revision/Plan/Metrics +
   status & revision-reason enums) is a validated TypeBox schema in
-  `@earendil-works/pi-platform` (`/plan` subpath), with the §5 plan-content-vs-
-  execution-state split enforced structurally and `requiredCapabilities`
-  capability-id-validated; and a `PlanStore` (`/kernel`) owns it as
-  project/workspace-scoped on-disk JSON (`<root>/plans/<planId>.json`),
-  read-through (no cache, so external edits never drift) with atomic writes
-  and the §8 full-document revision re-store. 27 unit tests green, repo check
-  green. Next: the planning capability skeleton (Step 2.3).
+  `@earendil-works/pi-platform` (`/plan` subpath); a `PlanStore` (`/kernel`) owns
+  it as project/workspace-scoped on-disk JSON (`<root>/plans/<planId>.json`),
+  read-through (no cache) with atomic writes and the §8 full-document revision
+  re-store; and a `/planning` subpath establishes the generic stage pattern —
+  stage contract + §11 strict-JSON runner (validate → one retry → degrade),
+  per-stage model routing (independent of the session model), stages as
+  `orchestration` capabilities with the store wired via the capability context,
+  the planning event surface, and one trivial stage run end-to-end (persists +
+  emits `plan.created`). 35 unit tests green, repo check green. Next: Goal
+  Analysis + the Clarification Gate (Step 2.4).
 - Step cadence: one capability or service per step. Every step's report ends
   with a "Recommended Next Step" section that picks the next cheapest
   validation, grounded in the design docs — this is how steps 1.3–1.10 were
