@@ -123,6 +123,13 @@ export {
 	runPlanningPipeline,
 } from "./orchestrator.ts";
 export {
+	createPlanCapabilityRunner,
+	type PlanCapabilityRunner,
+	type PlanCapabilityRunnerOptions,
+	type PlanListEntry,
+	planListEntry,
+} from "./plan-capability.ts";
+export {
 	renderPlanDag,
 	renderPlanHead,
 	renderPlanView,
