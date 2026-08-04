@@ -32,6 +32,13 @@ export {
 	policyDowngradeFromConstraints,
 } from "./constraints.ts";
 export {
+	buildDependencyGraph,
+	type DependencyBuildOptions,
+	type DependencyBuildResult,
+	type DependencyCandidate,
+	type DependencyEdge,
+} from "./dependency-builder.ts";
+export {
 	EVENT_PLAN_APPROVED,
 	EVENT_PLAN_COMPLETED,
 	EVENT_PLAN_CREATED,

@@ -195,6 +195,22 @@ tests green; repo `npm run check` green.
 **Arch refs:** §6.3.4 (unordered, unprioritized tasks; dedupe pass; no ordering/deps), §6.2, §11.
 **Recommended next step:** Dependency Builder (2.8).
 
+## Step 2.8 — Dependency Builder (DAG) — DONE
+
+**Report:** `docs/planning/DEPENDENCY_BUILDER_REPORT.md` · **Design:** `docs/planning/DEPENDENCY_BUILDER_DESIGN.md`
+
+**Implemented:** the deterministic Dependency Builder
+(`packages/platform/src/planning/dependency-builder.ts`): `buildDependencyGraph`
+builds the task DAG — artifact-I/O edges (consumer `inputs` matched to producers'
+`{deliverable, ...outputs}`), explicit ordering edges, a bounded AI fallback
+(`resolveAmbiguous`) for ambiguous/unresolved artifact candidates, edges folded
+into `dependsOn`, and always-on acyclicity (DFS back-edge detection) that returns
+`circularDependencies` to the Critic (never throws). 8 unit tests green; repo
+`npm run check` green.
+
+**Arch refs:** §6.3.5 (deterministic rules in order, bounded AI fallback, acyclicity), §4.
+**Recommended next step:** the Critic + Optimizer pair (2.9).
+
 ---
 
 ## Step 2.2 — Plan store + scope + persistence
