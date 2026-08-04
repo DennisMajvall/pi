@@ -1,7 +1,7 @@
 # Pi Capability Platform — the Gate (Step 1.10)
 
 **Status:** Design (pre-implementation)
-**Based on:** `docs/WRITE_EDIT_MIGRATION_REPORT.md` §8 (recommended next step), `docs/ROADMAP.md` (Step 1.10)
+**Based on:** `docs/capability-platform/WRITE_EDIT_MIGRATION_REPORT.md` §8 (recommended next step), `docs/ROADMAP.md` (Step 1.10)
 **Date:** 2026-02-08
 
 ---

@@ -1,7 +1,7 @@
 # Pi Capability Platform — find/ls + the grep Search Seam: Design Report (Step 1.8)
 
 **Status:** Implemented and validated
-**Based on:** `docs/FIND_LS_SEARCH_SEAM_DESIGN.md` (this step's design)
+**Based on:** `docs/capability-platform/FIND_LS_SEARCH_SEAM_DESIGN.md` (this step's design)
 **Date:** 2026-02-08
 
 ---

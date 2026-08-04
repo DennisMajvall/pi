@@ -35,8 +35,8 @@ exports → shutdown).
 ## Design
 
 See `docs/CAPABILITY_PLATFORM_CONTRACTS.md` (contracts, Step 1.2),
-`docs/RUNTIME_KERNEL_DESIGN.md` (kernel collaboration design, Step 1.3), and
-`docs/RUNTIME_KERNEL_REPORT.md` (Step 1.3 results) in the repo root.
+`docs/capability-platform/RUNTIME_KERNEL_DESIGN.md` (kernel collaboration design, Step 1.3), and
+`docs/capability-platform/RUNTIME_KERNEL_REPORT.md` (Step 1.3 results).
 
 ## Development
 

@@ -1,7 +1,7 @@
 # Pi Capability Platform — the Gate: Design Report (Step 1.10)
 
 **Status:** Implemented and validated
-**Based on:** `docs/CAPABILITY_PLATFORM_GATE_DESIGN.md` (this step's design)
+**Based on:** `docs/capability-platform/CAPABILITY_PLATFORM_GATE_DESIGN.md` (this step's design)
 **Date:** 2026-02-08
 
 ---

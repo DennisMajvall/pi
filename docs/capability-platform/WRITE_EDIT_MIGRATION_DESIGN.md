@@ -1,7 +1,7 @@
 # Pi Capability Platform — write/edit Migration + the fs Write Surface (Step 1.9)
 
 **Status:** Design (pre-implementation)
-**Based on:** `docs/FIND_LS_SEARCH_SEAM_REPORT.md` §8 (recommended next step), `docs/ROADMAP.md` (Step 1.9)
+**Based on:** `docs/capability-platform/FIND_LS_SEARCH_SEAM_REPORT.md` §8 (recommended next step), `docs/ROADMAP.md` (Step 1.9)
 **Date:** 2026-02-08
 
 ---

@@ -1,7 +1,7 @@
 # Pi Capability Platform — Third Capability (grep) + First Peer-Capability Dependency: Design Report (Step 1.5)
 
 **Status:** Implemented and validated
-**Based on:** `docs/GREP_CAPABILITY_DESIGN.md` (this step's design)
+**Based on:** `docs/capability-platform/GREP_CAPABILITY_DESIGN.md` (this step's design)
 **Date:** 2026-02-08
 
 ---

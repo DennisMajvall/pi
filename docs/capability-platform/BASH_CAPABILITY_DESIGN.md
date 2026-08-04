@@ -1,7 +1,7 @@
 # Pi Capability Platform — Second Capability (bash) + ProcessService Extraction (Step 1.4)
 
 **Status:** Design (pre-implementation)
-**Based on:** `docs/RUNTIME_KERNEL_REPORT.md` §8 (recommended next step), `docs/RUNTIME_KERNEL_DESIGN.md` (kernel ownership), `docs/CAPABILITY_PLATFORM_CONTRACTS.md` (Step 1.2 contracts)
+**Based on:** `docs/capability-platform/RUNTIME_KERNEL_REPORT.md` §8 (recommended next step), `docs/capability-platform/RUNTIME_KERNEL_DESIGN.md` (kernel ownership), `docs/CAPABILITY_PLATFORM_CONTRACTS.md` (Step 1.2 contracts)
 **Date:** 2026-02-08
 
 ---

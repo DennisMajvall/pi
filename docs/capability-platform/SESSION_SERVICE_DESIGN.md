@@ -1,7 +1,7 @@
 # Pi Capability Platform — SessionService Extraction behind SessionManager (Step 1.7)
 
 **Status:** Design (pre-implementation)
-**Based on:** `docs/SETTINGS_SERVICE_REPORT.md` §8 (recommended next step), `docs/RUNTIME_KERNEL_REPORT.md` §8 (service-extraction roadmap), `docs/CAPABILITY_PLATFORM_CONTRACTS.md` §5.x (SessionService contract), `docs/SETTINGS_SERVICE_DESIGN.md` (Step 1.6 design — the pattern being mirrored)
+**Based on:** `docs/capability-platform/SETTINGS_SERVICE_REPORT.md` §8 (recommended next step), `docs/capability-platform/RUNTIME_KERNEL_REPORT.md` §8 (service-extraction roadmap), `docs/CAPABILITY_PLATFORM_CONTRACTS.md` §5.x (SessionService contract), `docs/capability-platform/SETTINGS_SERVICE_DESIGN.md` (Step 1.6 design — the pattern being mirrored)
 **Date:** 2026-02-08
 
 ---

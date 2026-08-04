@@ -1,7 +1,7 @@
 # Pi Capability Platform — Third Capability (grep) with a Peer-Capability Dependency (Step 1.5)
 
 **Status:** Design (pre-implementation)
-**Based on:** `docs/BASH_CAPABILITY_REPORT.md` §8 (recommended next step), `docs/BASH_CAPABILITY_DESIGN.md` (Step 1.4 design), `docs/RUNTIME_KERNEL_REPORT.md` §8 (service-extraction roadmap)
+**Based on:** `docs/capability-platform/BASH_CAPABILITY_REPORT.md` §8 (recommended next step), `docs/capability-platform/BASH_CAPABILITY_DESIGN.md` (Step 1.4 design), `docs/capability-platform/RUNTIME_KERNEL_REPORT.md` §8 (service-extraction roadmap)
 **Date:** 2026-02-08
 
 ---

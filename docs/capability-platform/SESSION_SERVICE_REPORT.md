@@ -1,7 +1,7 @@
 # Pi Capability Platform — SessionService Extraction behind SessionManager: Design Report (Step 1.7)
 
 **Status:** Implemented and validated
-**Based on:** `docs/SESSION_SERVICE_DESIGN.md` (this step's design)
+**Based on:** `docs/capability-platform/SESSION_SERVICE_DESIGN.md` (this step's design)
 **Date:** 2026-02-08
 
 ---

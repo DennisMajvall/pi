@@ -1,7 +1,7 @@
 # Pi Capability Platform — find/ls + the grep Search Seam (Step 1.8)
 
 **Status:** Design (pre-implementation)
-**Based on:** `docs/SESSION_SERVICE_REPORT.md` §8 (recommended next step), `docs/GREP_CAPABILITY_REPORT.md` §5 (search-seam debt), `docs/RUNTIME_KERNEL_DESIGN.md` §"cwd-agnostic for absolute paths"
+**Based on:** `docs/capability-platform/SESSION_SERVICE_REPORT.md` §8 (recommended next step), `docs/capability-platform/GREP_CAPABILITY_REPORT.md` §5 (search-seam debt), `docs/capability-platform/RUNTIME_KERNEL_DESIGN.md` §"cwd-agnostic for absolute paths"
 **Date:** 2026-02-08
 
 ---
@@ -91,7 +91,7 @@ Semantics:
 
 - Patterns are **workspace-relative** (posix separators) by default, and the
   service is **cwd-agnostic for absolute patterns** (per
-  `docs/RUNTIME_KERNEL_DESIGN.md` §"cwd-agnostic for absolute paths"):
+  `docs/capability-platform/RUNTIME_KERNEL_DESIGN.md` §"cwd-agnostic for absolute paths"):
   an absolute pattern (e.g. `/tmp/ws/src/**/*.ts`) is walked from its own
   literal prefix. This matches how `read`/`stat` already accept absolute
   paths; sandbox enforcement is the deferred PermissionService's job.

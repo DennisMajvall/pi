@@ -47,6 +47,17 @@ Workers → **Memory** (features-to-implement #4)
 
 ## Notes
 
+- **Open items from Capability Platform (Step 1) are code-verified and tracked in
+  `docs/CAPABILITY_PLATFORM_STEP1_LEFTOVERS.md` (Part 7).** Nothing there is fixed in
+  isolation; each item is resolved by the roadmap step that owns it (Workspaces absorbs
+  M2/M7/M8/M12, Event System absorbs M19, later items absorb the rest — see that doc).
+  M1 is a deferred human decision gate, not owned by any item.
+
+- **Concurrency & parallelism:** the three axes (runtime scoping A, filesystem
+  isolation B, in-process scheduling C) and the M1 per-session-runtime decision gate are
+  **not roadmap material** — they live in `docs/RUNTIME_MODEL.md`. In short: no item owns
+  Axis A; Workspaces (3) is Axis B; Event/Workers/Task/SubAgents (4/5/7/8) are Axis C on
+  the single kernel.
 - Current position: Step 1.10 (the gate) is complete — **Capability Platform
   (ROADMAP item 1) is done**. `_buildRuntime` consumes the platform tool set
   atomically (all seven builtin tools or none): the platform is the default

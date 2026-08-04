@@ -16,7 +16,7 @@
  * glob is a deterministic minimatch walk: the pattern is evaluated with
  * standard glob semantics (dotfile rule, `**` crossing segment boundaries),
  * workspace-relative by default and cwd-agnostic for absolute patterns (see
- * docs/RUNTIME_KERNEL_DESIGN.md). The walk root is the pattern's literal
+ * docs/capability-platform/RUNTIME_KERNEL_DESIGN.md). The walk root is the pattern's literal
  * (magic-free) prefix, so the search never traverses parts of the tree the
  * pattern cannot reach.
  */

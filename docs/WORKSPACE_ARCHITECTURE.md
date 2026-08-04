@@ -2,7 +2,7 @@
 
 **Status:** Architecture design (pre-implementation)
 **Scope:** Design only. No implementation yet.
-**Related:** `docs/PLANNING_ARCHITECTURE.md`, `docs/CAPABILITY_PLATFORM_CONTRACTS.md`, `docs/RUNTIME_KERNEL_DESIGN.md` (Steps 1.2/1.3)
+**Related:** `docs/PLANNING_ARCHITECTURE.md`, `docs/CAPABILITY_PLATFORM_CONTRACTS.md`, `docs/capability-platform/RUNTIME_KERNEL_DESIGN.md` (Steps 1.2/1.3)
 
 ---
 
@@ -273,7 +273,7 @@ Honest framing for PRs/discussions: this layer isolates *file writes*, not *proc
 
 The Workspace layer is infrastructure — a platform service, not a capability:
 
-- **`WorkspaceManager` is a platform service** alongside `FileSystemService`/`ProcessService` in the kernel's `ServiceProvider` (Step 1.3). It is deterministic code; the LLM never calls it directly.
+- **`WorkspaceManager` is a platform service** alongside `FileSystemService`/`ProcessService` in the kernel's `ServiceProvider` (Step 1.3). It is deterministic code; the LLM never calls it directly. It is process-scoped by design (see §12a), independent of the deferred per-session runtime-scoping item.
 - **`WorkspaceId` is the branded identifier** from the platform contracts (`@earendil-works/pi-platform/identifier`), giving workspaces first-class identity.
 - **Execution cwd**: the platform `ToolExecutionContext.cwd` (capability contracts) is set to `Workspace.root` for every tool call during a task. No agent-facing API change — the workspace is invisible by design.
 - **Events**: `workspace.created`, `workspace.synced`, `workspace.merged`, `workspace.conflict`, `workspace.deleted`, `workspace.reaped` over the `EventBusService` (new canonical event types, added to the platform event constants when implemented) — observability + multi-frontend support.
@@ -281,6 +281,34 @@ The Workspace layer is infrastructure — a platform service, not a capability:
 - **Session lifecycle**: the executor deletes a session's workspaces on session end; `cleanup()` covers the crashed-process case.
 
 ---
+
+## 12a. Scope Note: Runtime Model (single kernel per process) & Concurrency Axes
+
+This design **assumes the current single-kernel-per-process runtime** (one
+`KernelRuntime` and one `ServiceProvider` per process, boot-bound at
+`ensurePlatformRuntime`) and is fully compatible with it: a session can own many
+tasks, each executing in its own workspace, all served by that one kernel. `Workspace.root`
+replaces the per-execution **cwd** (`ToolExecutionContext.cwd`), not the service binding.
+
+**The full cross-cutting framework (the three parallelism axes A/B/C and the M1 /
+per-session-runtime human decision gate) lives in `docs/RUNTIME_MODEL.md`.** This
+section keeps only what is specific to Workspaces (Axis B) vs that model.
+
+- Workspaces is **Axis B — filesystem isolation**: a separate, isolated working tree per
+task (git worktrees) on the single kernel; only per-execution `cwd` changes. It is not
+Axis A (runtime scoping) or Axis C (in-process scheduling).
+- **`WorkspaceManager` is a process-scoped platform service by design.** It holds the
+  cross-process Git lock and coordinates all worktrees repository-wide, so it must stay a
+  process singleton — never duplicated per session or per workspace.
+- This document does **not** deliver the per-session runtime fix (Axis A / M1). That
+  concern — multiple `AgentSession`s in one process each needing their own session-scoped
+  service state (settings, session) behind `ctx.settings` / `ctx.session` — is a separate
+  **runtime-scoping / host-contracts** item, tracked independently (`docs/RUNTIME_MODEL.md`,
+  `docs/CAPABILITY_PLATFORM_STEP1_LEFTOVERS.md` M1) and designed only after Workspaces
+  (its multi-session execution data drives which services are truly session-scoped vs.
+  naturally process-scoped, e.g. fs/process/WorkspaceManager). It is distinct from, and
+  not required by, the Axis C features (Events/Workers/Execution Engine/SubAgents), which
+  are process-internal concurrency on the single kernel.
 
 ## 13. Risks & Mitigations
 

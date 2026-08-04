@@ -2,7 +2,7 @@
 
 **Status:** Architecture design (pre-implementation; increments on the Step 1.3 kernel)
 **Scope:** Design only. No implementation yet.
-**Related:** `docs/CAPABILITY_PLATFORM_CONTRACTS.md` (Step 1.2), `docs/RUNTIME_KERNEL_DESIGN.md` / `docs/RUNTIME_KERNEL_REPORT.md` (Step 1.3), `docs/PLANNING_ARCHITECTURE.md`, `docs/WORKSPACE_ARCHITECTURE.md`, `docs/KNOWLEDGE_MEMORY_ARCHITECTURE.md`
+**Related:** `docs/CAPABILITY_PLATFORM_CONTRACTS.md` (Step 1.2), `docs/capability-platform/RUNTIME_KERNEL_DESIGN.md` / `docs/capability-platform/RUNTIME_KERNEL_REPORT.md` (Step 1.3), `docs/PLANNING_ARCHITECTURE.md`, `docs/WORKSPACE_ARCHITECTURE.md`, `docs/KNOWLEDGE_MEMORY_ARCHITECTURE.md`
 
 ---
 

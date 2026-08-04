@@ -1,7 +1,7 @@
 # Pi Capability Platform — SettingsService Extraction behind SettingsManager: Design Report (Step 1.6)
 
 **Status:** Implemented and validated
-**Based on:** `docs/SETTINGS_SERVICE_DESIGN.md` (this step's design)
+**Based on:** `docs/capability-platform/SETTINGS_SERVICE_DESIGN.md` (this step's design)
 **Date:** 2026-02-08
 
 ---

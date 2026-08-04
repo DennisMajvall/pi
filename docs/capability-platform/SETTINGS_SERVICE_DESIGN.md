@@ -1,7 +1,7 @@
 # Pi Capability Platform — SettingsService Extraction behind SettingsManager (Step 1.6)
 
 **Status:** Design (pre-implementation)
-**Based on:** `docs/GREP_CAPABILITY_REPORT.md` §8 (recommended next step), `docs/RUNTIME_KERNEL_REPORT.md` §8 (service-extraction roadmap), `docs/CAPABILITY_PLATFORM_CONTRACTS.md` §5.4 (SettingsService contract), `docs/GREP_CAPABILITY_DESIGN.md` (Step 1.5 design)
+**Based on:** `docs/capability-platform/GREP_CAPABILITY_REPORT.md` §8 (recommended next step), `docs/capability-platform/RUNTIME_KERNEL_REPORT.md` §8 (service-extraction roadmap), `docs/CAPABILITY_PLATFORM_CONTRACTS.md` §5.4 (SettingsService contract), `docs/capability-platform/GREP_CAPABILITY_DESIGN.md` (Step 1.5 design)
 **Date:** 2026-02-08
 
 ---

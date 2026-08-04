@@ -1,7 +1,7 @@
 # Pi Capability Platform — Second Capability (bash) + ProcessService Extraction: Design Report (Step 1.4)
 
 **Status:** Implemented and validated
-**Based on:** `docs/BASH_CAPABILITY_DESIGN.md` (this step's design)
+**Based on:** `docs/capability-platform/BASH_CAPABILITY_DESIGN.md` (this step's design)
 **Date:** 2026-02-08
 
 ---

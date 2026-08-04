@@ -2,7 +2,7 @@
 
 **Status:** Architecture design (pre-implementation)
 **Scope:** Design only. No implementation yet.
-**Related:** `docs/PLANNING_ARCHITECTURE.md`, `docs/WORKSPACE_ARCHITECTURE.md`, `docs/CAPABILITY_PLATFORM_CONTRACTS.md`, `docs/RUNTIME_KERNEL_DESIGN.md` (Steps 1.2/1.3)
+**Related:** `docs/PLANNING_ARCHITECTURE.md`, `docs/WORKSPACE_ARCHITECTURE.md`, `docs/CAPABILITY_PLATFORM_CONTRACTS.md`, `docs/capability-platform/RUNTIME_KERNEL_DESIGN.md` (Steps 1.2/1.3)
 
 ---
 

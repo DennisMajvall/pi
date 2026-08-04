@@ -1,7 +1,7 @@
 # Pi Capability Platform — write/edit Migration + the fs Write Surface: Design Report (Step 1.9)
 
 **Status:** Implemented and validated
-**Based on:** `docs/WRITE_EDIT_MIGRATION_DESIGN.md` (this step's design)
+**Based on:** `docs/capability-platform/WRITE_EDIT_MIGRATION_DESIGN.md` (this step's design)
 **Date:** 2026-02-08
 
 ---
