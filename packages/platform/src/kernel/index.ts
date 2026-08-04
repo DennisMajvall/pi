@@ -40,6 +40,7 @@ export {
 	type KernelLifecycleManagerOptions,
 } from "./lifecycle.ts";
 export { BuiltinCapabilityLoader } from "./loader.ts";
+export { PlanStore, type PlanStoreOptions, type PlanSummary } from "./plan-store.ts";
 export { NodeProcessService } from "./process-service.ts";
 export {
 	KernelCapabilityRegistry,

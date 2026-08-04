@@ -78,6 +78,22 @@ tests green; repo `npm run check` green.
 **Arch refs:** §4 (canonical schema), §14 (`Metrics`).
 **Recommended next step:** the plan store, so the schema has a real owner (2.2).
 
+## Step 2.2 — Plan store + scope + persistence — DONE
+
+**Report:** `docs/planning/PLAN_STORE_REPORT.md` · **Design:** `docs/planning/PLAN_STORE_DESIGN.md`
+
+**Implemented:** `PlanStore` in `@earendil-works/pi-platform/kernel`
+(`packages/platform/src/kernel/plan-store.ts`): project/workspace-scoped,
+on-disk-JSON source of truth (`<root>/plans/<planId>.json`), read-through with
+no cache (external edits never drift), atomic writes, and the §8 full-document
+re-store per revision via `revise()`. Validates on save/load against
+`PlanSchema`; plan ids filename-safe. 13 unit tests green; repo `npm run check`
+green.
+
+**Arch refs:** §8 (versioning), §15 (where the plan lives), §16 (plan store).
+**Recommended next step:** the planning capability skeleton, so stages can read/write
+the store through the platform (2.3).
+
 ---
 
 ## Step 2.2 — Plan store + scope + persistence
