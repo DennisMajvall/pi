@@ -132,12 +132,17 @@ export async function buildDependencyGraph(
 	return {
 		tasks: foldedTasks,
 		edges,
-		circularDependencies: findCycles(tasks, edges),
+		circularDependencies: findCircularDependencies(tasks, edges),
 	};
 }
 
-/** Find cycles in the directed graph (DFS back-edge detection), deduped. */
-function findCycles(tasks: Task[], edges: DependencyEdge[]): string[][] {
+/**
+ * Find cycles in the directed graph (DFS back-edge detection), deduped.
+ * Exported for the 2.10 Plan Validation step to re-run acyclicity on the
+ * persisted DAG (edges derived from `dependsOn`), and reused by
+ * `buildDependencyGraph`. Returns cycles, never throws.
+ */
+export function findCircularDependencies(tasks: Task[], edges: DependencyEdge[]): string[][] {
 	const adjacency = new Map<string, string[]>();
 	for (const task of tasks) {
 		adjacency.set(String(task.id), []);

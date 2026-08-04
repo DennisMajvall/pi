@@ -56,8 +56,9 @@ Detailed substeps and per-step decisions live in
 - [x] Step 2.9 — Plan Critic + Optimizer (adversarial pass + refinement, stage
       error containment)
       (`docs/planning/CRITIC_OPTIMIZER_DESIGN.md` / `CRITIC_OPTIMIZER_REPORT.md`)
-- [ ] Step 2.10 — Plan Validation + Metrics (deterministic schema/DAG/coverage +
+- [x] Step 2.10 — Plan Validation + Metrics (deterministic schema/DAG/coverage +
       AI-assessed score)
+      (`docs/planning/PLAN_VALIDATION_METRICS_DESIGN.md` / `PLAN_VALIDATION_METRICS_REPORT.md`)
 - [ ] Step 2.11 — User Review / approval gate (status transitions; schema-
       preserving `user_edit`; on-disk + dedicated TUI plan view, editable via
       prompts)
@@ -111,7 +112,7 @@ Detailed substeps and per-step decisions live in
   driven by a per-tool spec table, and the manifests' `provides.tool` prose
   is sourced from the tool templates (a fixture pins manifest↔tool equality).
   Next: Planning (`docs/PLANNING_ARCHITECTURE.md`).
-- Current position (Planning): Steps 2.1–2.9 complete — the canonical Plan object
+- Current position (Planning): Steps 2.1–2.10 complete — the canonical Plan object
   (Goal/Assumption/Constraint/Task/PlanningPolicy/Revision/Plan/Metrics +
   status & revision-reason enums) is a validated TypeBox schema in
   `@earendil-works/pi-platform` (`/plan` subpath); a `PlanStore` (`/kernel`) owns
@@ -129,9 +130,13 @@ Detailed substeps and per-step decisions live in
   deterministic Dependency Builder (`buildDependencyGraph`, DAG + acyclicity),
   and the Plan Critic + Optimizer pair (`orchestration.critic`/`orchestration.optimizer`,
   optional §11 stages, `critic`/`optimizer` revisions) — plus the deterministic §9
-  Clarification Gate, the never-upgrades policy guard hook (§7), and the
-  constraint-driven downgrade rule. 85 unit tests green, repo check green. Next:
-  Plan Validation + Metrics (Step 2.10).
+  Clarification Gate, the never-upgrades policy guard hook (§7), the constraint-driven
+  downgrade rule, and Step 2.10's Plan Validation + Metrics: the deterministic
+  `validatePlan` (schema / re-run acyclicity / coverage — reachable criteria, task
+  purposes, no duplicate deliverables) and the Planning Metrics (DAG-derived
+  `parallelism` via `analyzeDag`/`computeParallelism`, the optional non-mutating AI
+  `metricsStage`, and `combineMetrics` onto the §14 `Metrics` set on the plan).
+  164 unit tests green, repo check green. Next: User Review / approval gate (Step 2.11).
 - Step cadence: one capability or service per step. Every step's report ends
   with a "Recommended Next Step" section that picks the next cheapest
   validation, grounded in the design docs — this is how steps 1.3–1.10 were

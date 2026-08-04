@@ -230,6 +230,28 @@ revision helpers: `changedTaskIds` (added/removed/modified via deep equality) an
 **Arch refs:** §6.3.6/7 (adversarial pass and refinement), §6.2/§11 (optional stages), §8 (`critic`/`optimizer` reasons).
 **Recommended next step:** Plan Validation + Metrics (2.10).
 
+## Step 2.10 — Plan Validation + Metrics — DONE
+
+**Report:** `docs/planning/PLAN_VALIDATION_METRICS_REPORT.md` · **Design:** `docs/planning/PLAN_VALIDATION_METRICS_DESIGN.md`
+
+**Implemented:** the deterministic Plan Validation + the Planning Metrics
+(`packages/platform/src/planning/validation.ts` + `metrics.ts`): `validatePlan`
+schema-validates the full plan, re-runs acyclicity on the persisted `dependsOn`
+DAG (via `findCircularDependencies`, the 2.8 cycle checker now exported), and
+runs the coverage check (every success criterion reachable from some task
+`deliverable`/`outputs`, every task has a purpose, no duplicate deliverables) —
+failure is a pipeline bug reported to the producing stage's retry/degrade path.
+`analyzeDag`/`computeParallelism` derive `parallelism` (width / critical path,
+0–100) deterministically from the DAG (§14); `metricsStage` (`orchestration.metrics`)
+is an **optional** (§11) non-mutating AI stage emitting only the subjective fields
+(completeness/confidence/risk/unknownCount/missingInformation) on the routed
+model, and `combineMetrics` merges them with the deterministic `parallelism` into
+the §14 `Metrics` set on the plan (no revision — metrics change no tasks). 15 unit
+tests green; repo `npm run check` green.
+
+**Arch refs:** §6.3.8 (deterministic validation), §6.3.9 + §14 (`Metrics`; `parallelism` DAG-derived).
+**Recommended next step:** User Review / approval (2.11).
+
 ---
 
 ## Step 2.2 — Plan store + scope + persistence

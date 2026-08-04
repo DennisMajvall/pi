@@ -7,8 +7,10 @@
  * planning event surface, the stage-as-`orchestration`-capability wrapper,
  * Goal Analysis (cheap-model routed), the deterministic Clarification Gate,
  * Execution Strategy Selection, the policy guard hook, Constraint
- * Extraction's policy-downgrade fold, and Task Decomposition with dedupe +
- * budget passes. Exposed via the subpath only (implementation, like /kernel).
+ * Extraction's policy-downgrade fold, Task Decomposition with dedupe + budget
+ * passes, the deterministic Dependency Builder + acyclicity, the Plan Critic +
+ * Optimizer pair, and the deterministic Plan Validation + Planning Metrics
+ * (Step 2.10). Exposed via the subpath only (implementation, like /kernel).
  */
 
 export {
@@ -45,6 +47,7 @@ export {
 	type DependencyBuildResult,
 	type DependencyCandidate,
 	type DependencyEdge,
+	findCircularDependencies,
 } from "./dependency-builder.ts";
 export {
 	EVENT_PLAN_APPROVED,
@@ -69,6 +72,18 @@ export {
 	type GoalAnalysisInput,
 	goalAnalysisStage,
 } from "./goal-analysis.ts";
+export {
+	type AiAssessedMetrics,
+	AiAssessedMetricsSchema,
+	analyzeDag,
+	combineMetrics,
+	computeParallelism,
+	type DagAnalysis,
+	METRICS_MODEL_KEY,
+	METRICS_SYSTEM_PROMPT,
+	type MetricsInput,
+	metricsStage,
+} from "./metrics.ts";
 export {
 	appendRevision,
 	changedTaskIds,
@@ -107,3 +122,9 @@ export {
 } from "./task-decomposition.ts";
 export { completeTasks, type DecomposedTask, dedupeTasks, enforceMaxTasks } from "./tasks.ts";
 export { type CreateDraftPlanInput, createDraftPlanStage } from "./trivial.ts";
+export {
+	type PlanValidationResult,
+	type ValidationIssue,
+	ValidationIssueCode,
+	validatePlan,
+} from "./validation.ts";
