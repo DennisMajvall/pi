@@ -2,10 +2,11 @@
  * @earendil-works/pi-platform/planning
  *
  * Implementation of the generic planning-stage pattern (Step 2.3)
- * and the first real AI stage + deterministic gate (Step 2.4):
+ * and the first AI stages + deterministic gates (Steps 2.4–2.5):
  * the stage contract + strict-JSON runner + per-stage model routing, the
  * planning event surface, the stage-as-`orchestration`-capability wrapper,
- * Goal Analysis (cheap-model routed) and the deterministic Clarification Gate.
+ * Goal Analysis (cheap-model routed), the deterministic Clarification Gate,
+ * Execution Strategy Selection, and the policy guard hook.
  * Exposed via the subpath only (implementation, like /kernel).
  */
 
@@ -27,11 +28,18 @@ export {
 	planReplanningEvent,
 } from "./events.ts";
 export {
+	EXECUTION_STRATEGY_MODEL_KEY,
+	EXECUTION_STRATEGY_SYSTEM_PROMPT,
+	type ExecutionStrategyInput,
+	executionStrategyStage,
+} from "./execution-strategy.ts";
+export {
 	GOAL_ANALYSIS_MODEL_KEY,
 	GOAL_ANALYSIS_SYSTEM_PROMPT,
 	type GoalAnalysisInput,
 	goalAnalysisStage,
 } from "./goal-analysis.ts";
+export { downgradePolicy, type PolicyDowngrade } from "./policy.ts";
 export {
 	DEFAULT_STAGE_MODEL_ROUTING,
 	definePlanningStageCapability,

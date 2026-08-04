@@ -128,11 +128,32 @@ the store, emits `plan.created`). 8 unit tests green; repo `npm run check` green
 The deterministic `runClarificationGate(goal, opts)` decides `clear` /
 `needs_clarification` (surfacing `goal.clarificationQuestions`) /
 `proceed_with_unknowns` (unknowns → low-confidence `Assumption`s) within
-`maxRounds` (default 2), re-running Goal Analysis only on each loop pass. 8 unit
-tests green; repo `npm run check` green.
+`maxRounds` (default 2), re-running Goal Analysis only on each loop pass. Model
+resolution is settings-shaped (`stageModelRoutingFromSettings`) and guarded
+(`requireStageModel` fails loudly when unconfigured). 11 unit tests green; repo
+`npm run check` green.
 
 **Arch refs:** §6.3.1 (Goal Analysis), §9 (clarification), §6.4.
 **Recommended next step:** Execution Strategy Selection (2.5).
+
+## Step 2.5 — Execution Strategy Selection (first-class) — DONE
+
+**Report:** `docs/planning/EXECUTION_STRATEGY_REPORT.md` · **Design:** `docs/planning/EXECUTION_STRATEGY_DESIGN.md`
+
+**Implemented:** the first-class Execution Strategy Selection
+(`packages/platform/src/planning/execution-strategy.ts`): `executionStrategyStage`
+is an `orchestration` capability (`orchestration.strategy`) emitting strict
+`PlanningPolicy` JSON against `PlanningPolicySchema`, routed via the
+`execution_strategy` model key through the §11 runner (mandatory). The policy is
+stored on the plan (`plan.policy`, validated by `PlanSchema`) and is part of every
+downstream stage's input set (§6.6). Plus the deterministic guard hook
+(`packages/platform/src/planning/policy.ts`): `downgradePolicy` never upgrades —
+caps `planningDepth` downward, only disables parallel/specialist/dual-planner,
+only forces approval (§7). 7 unit tests green; repo `npm run check` green.
+
+**Arch refs:** §7 (why first-class), §6.3.2, §6.6 (policy drives everything).
+**Recommended next step:** Constraint Extraction, which can deterministically downgrade
+policy (2.6).
 
 ---
 

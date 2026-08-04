@@ -44,7 +44,8 @@ Detailed substeps and per-step decisions live in
 - [x] Step 2.4 — Goal Analysis stage (cheap purpose-chosen model) + deterministic
       Clarification Gate
       (`docs/planning/GOAL_ANALYSIS_DESIGN.md` / `GOAL_ANALYSIS_REPORT.md`)
-- [ ] Step 2.5 — Execution Strategy Selection (first-class; emits `PlanningPolicy`)
+- [x] Step 2.5 — Execution Strategy Selection (first-class; emits `PlanningPolicy`)
+      (`docs/planning/EXECUTION_STRATEGY_DESIGN.md` / `EXECUTION_STRATEGY_REPORT.md`)
 - [ ] Step 2.6 — Constraint Extraction (deterministic policy-downgrade rule)
 - [ ] Step 2.7 — Task Decomposition (unordered tasks + dedupe pass)
 - [ ] Step 2.8 — Dependency Builder (deterministic rules + bounded AI fallback;
@@ -106,7 +107,7 @@ Detailed substeps and per-step decisions live in
   driven by a per-tool spec table, and the manifests' `provides.tool` prose
   is sourced from the tool templates (a fixture pins manifest↔tool equality).
   Next: Planning (`docs/PLANNING_ARCHITECTURE.md`).
-- Current position (Planning): Steps 2.1–2.4 complete — the canonical Plan object
+- Current position (Planning): Steps 2.1–2.5 complete — the canonical Plan object
   (Goal/Assumption/Constraint/Task/PlanningPolicy/Revision/Plan/Metrics +
   status & revision-reason enums) is a validated TypeBox schema in
   `@earendil-works/pi-platform` (`/plan` subpath); a `PlanStore` (`/kernel`) owns
@@ -115,11 +116,12 @@ Detailed substeps and per-step decisions live in
   re-store; a `/planning` subpath establishes the generic stage pattern (stage
   contract + §11 strict-JSON runner, per-stage model routing independent of the
   session model, stages as `orchestration` capabilities, the planning event
-  surface, one trivial stage end-to-end); and the first real AI stage — Goal
-  Analysis (`orchestration.goal.analysis`), cheap-model routed, strict `Goal`
-  JSON — plus the deterministic §9 Clarification Gate (bounded rounds,
-  `proceed_with_unknowns` fallback). 43 unit tests green, repo check green.
-  Next: Execution Strategy Selection (Step 2.5).
+  surface, one trivial stage end-to-end); and two real AI stages — Goal
+  Analysis (`orchestration.goal.analysis`, cheap-model routed, strict `Goal`
+  JSON) and Execution Strategy Selection (`orchestration.strategy`, strict
+  `PlanningPolicy` JSON stored on the plan) — plus the deterministic §9
+  Clarification Gate and the never-upgrades policy guard hook (§7). 54 unit
+  tests green, repo check green. Next: Constraint Extraction (Step 2.6).
 - Step cadence: one capability or service per step. Every step's report ends
   with a "Recommended Next Step" section that picks the next cheapest
   validation, grounded in the design docs — this is how steps 1.3–1.10 were
