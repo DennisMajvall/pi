@@ -176,6 +176,24 @@ export async function runStrictJsonStage<Out extends TSchema>(
 	return { kind: "degraded", error: `${stageName} skipped after failed validation: ${error}`, attempts };
 }
 
+/** Result of an optional AI stage (§11: skipped rather than aborted on repeated failure). */
+export type OptionalStageResult<T> = { kind: "ok"; output: T } | { kind: "skipped"; reason: string };
+
+/**
+ * Run an optional AI stage. Maps the §11 `degraded` outcome to an explicit
+ * `{ kind: "skipped" }` so optional stages (Critic/Optimizer, dual planner)
+ * never abort the pipeline.
+ */
+export async function runOptionalStage<Out extends TSchema>(
+	options: StrictJsonOptions<Out>,
+): Promise<OptionalStageResult<Static<Out>>> {
+	const result = await runStrictJsonStage({ ...options, mandatory: false });
+	if (result.kind === "ok") {
+		return { kind: "ok", output: result.output };
+	}
+	return { kind: "skipped", reason: result.error ?? "skipped after failed validation" };
+}
+
 function buildPrompt(base: string, validationErrors: string[]): string {
 	if (validationErrors.length === 0) {
 		return base;

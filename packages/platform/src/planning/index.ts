@@ -32,6 +32,14 @@ export {
 	policyDowngradeFromConstraints,
 } from "./constraints.ts";
 export {
+	CRITIC_MODEL_KEY,
+	CRITIC_SYSTEM_PROMPT,
+	type CriticInput,
+	CriticSchema,
+	type Critique,
+	criticStage,
+} from "./critic.ts";
+export {
 	buildDependencyGraph,
 	type DependencyBuildOptions,
 	type DependencyBuildResult,
@@ -61,15 +69,25 @@ export {
 	type GoalAnalysisInput,
 	goalAnalysisStage,
 } from "./goal-analysis.ts";
+export {
+	appendRevision,
+	changedTaskIds,
+	OPTIMIZER_MODEL_KEY,
+	OPTIMIZER_SYSTEM_PROMPT,
+	type OptimizerInput,
+	optimizerStage,
+} from "./optimizer.ts";
 export { downgradePolicy, type PolicyDowngrade } from "./policy.ts";
 export {
 	DEFAULT_STAGE_MODEL_ROUTING,
 	definePlanningStageCapability,
+	type OptionalStageResult,
 	type PlanningStage,
 	type PlanningStageExport,
 	type PlanningStageRunContext,
 	requireStageModel,
 	resolveStageModel,
+	runOptionalStage,
 	runStrictJsonStage,
 	type StageCompletion,
 	type StageCompletionRequest,

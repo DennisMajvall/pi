@@ -53,8 +53,9 @@ Detailed substeps and per-step decisions live in
 - [x] Step 2.8 — Dependency Builder (deterministic rules + bounded AI fallback;
       acyclicity check → DAG)
       (`docs/planning/DEPENDENCY_BUILDER_DESIGN.md` / `DEPENDENCY_BUILDER_REPORT.md`)
-- [ ] Step 2.9 — Plan Critic + Optimizer (adversarial pass + refinement, stage
+- [x] Step 2.9 — Plan Critic + Optimizer (adversarial pass + refinement, stage
       error containment)
+      (`docs/planning/CRITIC_OPTIMIZER_DESIGN.md` / `CRITIC_OPTIMIZER_REPORT.md`)
 - [ ] Step 2.10 — Plan Validation + Metrics (deterministic schema/DAG/coverage +
       AI-assessed score)
 - [ ] Step 2.11 — User Review / approval gate (status transitions; schema-
@@ -110,7 +111,7 @@ Detailed substeps and per-step decisions live in
   driven by a per-tool spec table, and the manifests' `provides.tool` prose
   is sourced from the tool templates (a fixture pins manifest↔tool equality).
   Next: Planning (`docs/PLANNING_ARCHITECTURE.md`).
-- Current position (Planning): Steps 2.1–2.8 complete — the canonical Plan object
+- Current position (Planning): Steps 2.1–2.9 complete — the canonical Plan object
   (Goal/Assumption/Constraint/Task/PlanningPolicy/Revision/Plan/Metrics +
   status & revision-reason enums) is a validated TypeBox schema in
   `@earendil-works/pi-platform` (`/plan` subpath); a `PlanStore` (`/kernel`) owns
@@ -124,11 +125,13 @@ Detailed substeps and per-step decisions live in
   Execution Strategy Selection (`orchestration.strategy`, strict `PlanningPolicy`
   JSON stored on the plan), Constraint Extraction (`orchestration.constraints`, four
   families folded onto `Plan.constraints`), Task Decomposition
-  (`orchestration.tasks`, unordered tasks + dedupe/budget/complete passes), and
-  the deterministic Dependency Builder (`buildDependencyGraph`, DAG + acyclicity)
-  — plus the deterministic §9 Clarification Gate, the never-upgrades policy guard
-  hook (§7), and the constraint-driven downgrade rule. 77 unit tests green, repo
-  check green. Next: Plan Critic + Optimizer (Step 2.9).
+  (`orchestration.tasks`, unordered tasks + dedupe/budget/complete passes), the
+  deterministic Dependency Builder (`buildDependencyGraph`, DAG + acyclicity),
+  and the Plan Critic + Optimizer pair (`orchestration.critic`/`orchestration.optimizer`,
+  optional §11 stages, `critic`/`optimizer` revisions) — plus the deterministic §9
+  Clarification Gate, the never-upgrades policy guard hook (§7), and the
+  constraint-driven downgrade rule. 85 unit tests green, repo check green. Next:
+  Plan Validation + Metrics (Step 2.10).
 - Step cadence: one capability or service per step. Every step's report ends
   with a "Recommended Next Step" section that picks the next cheapest
   validation, grounded in the design docs — this is how steps 1.3–1.10 were

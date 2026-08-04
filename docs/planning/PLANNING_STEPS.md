@@ -211,6 +211,25 @@ into `dependsOn`, and always-on acyclicity (DFS back-edge detection) that return
 **Arch refs:** §6.3.5 (deterministic rules in order, bounded AI fallback, acyclicity), §4.
 **Recommended next step:** the Critic + Optimizer pair (2.9).
 
+## Step 2.9 — Plan Critic + Optimizer — DONE
+
+**Report:** `docs/planning/CRITIC_OPTIMIZER_REPORT.md` · **Design:** `docs/planning/CRITIC_OPTIMIZER_DESIGN.md`
+
+**Implemented:** the adversarial/refinement pair
+(`packages/platform/src/planning/critic.ts` + `optimizer.ts`): `criticStage`
+(`orchestration.critic`) emits the six-field `Critique` against `CriticSchema`
+(missing/duplicate/circular/assumptions/risks/questions); `optimizerStage`
+(`orchestration.optimizer`) returns an updated `Plan` (same `PlanSchema`),
+preserving goal/intent. Both are **optional** (§11) — a new `runOptionalStage`
+wrapper maps repeated failure to `{ kind: "skipped" }`, never aborting. §8
+revision helpers: `changedTaskIds` (added/removed/modified via deep equality) and
+`appendRevision` (records `critic`/`optimizer` with next version + refreshed
+`updatedAt`, re-stored full-document via `PlanStore`). 8 unit tests green; repo
+`npm run check` green.
+
+**Arch refs:** §6.3.6/7 (adversarial pass and refinement), §6.2/§11 (optional stages), §8 (`critic`/`optimizer` reasons).
+**Recommended next step:** Plan Validation + Metrics (2.10).
+
 ---
 
 ## Step 2.2 — Plan store + scope + persistence
