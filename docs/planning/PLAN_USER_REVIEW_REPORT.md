@@ -67,13 +67,12 @@ Key behaviors:
    best-effort translator with a small, tested directive grammar. Every edit ends in
    an acyclicity + schema guard, so an edit that would break the DAG or the contract
    is rejected with a diagnostic rather than persisted.
-4. **The TUI plan-view surface is a 2.12 wiring decision.** This step ships the
+4. **The TUI plan-view surface is its own step (2.13).** This step ships the
    deterministic platform core (gate + editable plan + textual DAG/task renderer),
-   which is what the TUI displays and what 2.12's agent-loop integration consumes.
-   Steps 2.1–2.10 stayed purely in `packages/platform`; the interactive TUI widget
-   (pane/command binding + prompt collection) is scoped to 2.12 with the orchestrator
-   and real model wiring. This is the consistent reading of §15's open question
-   ("inline editor vs selector; DAG rendering") against PLANNING_STEPS Step 2.12.
+   which is what the TUI displays and drives. Steps 2.1–2.10 stayed purely in
+   `packages/platform`; the interactive TUI widget (pane/command binding + prompt
+   collection) is a separate `packages/tui` follow-up (PLANNING_STEPS Step 2.13),
+   consistent with §15's open question ("inline editor vs selector; DAG rendering").
 
 ## 3. Validation Results
 
@@ -97,10 +96,10 @@ Key behaviors:
 ## 4. Scope Notes
 
 - Step 2.11 was the deterministic approval gate + schema-preserving `user_edit` +
-  the deterministic textual plan view (the TUI's view data). The interactive TUI
-  widget (DAG pane rendering + prompt collection) and the end-to-end orchestrator
-  that runs the full pipeline and wires real models are 2.12 (which owns surfacing
-  the approved plan to the agent loop through the TUI plan view, per its own text).
+  the deterministic textual plan view (the view source). The interactive TUI widget
+  (DAG pane rendering + prompt collection) is its own follow-up step (2.13), on top
+  of the 2.11 renderer and capabilities. The end-to-end orchestrator that runs the
+  full pipeline and wires real models is 2.12.
 - Edits are deliberately DAG-preserving in the plan-content sense (dependsOn edges):
   scheduling-order changes, parallelism, and merge/split are covered; a full semantic
   "execution overlay" re-plan is §13/2.12 territory.
@@ -114,6 +113,7 @@ approved-plan state machine this step completes is the consumer for 2.12's minim
 deterministic scheduler: `ready(t)` from `dependsOn`, `next` by priority then id,
 resolving `requiredCapabilities` to registry capabilities; the hybrid `/plan` +
 complexity auto-trigger; and the orchestrator that chains 2.4–2.11 into
-request → approved plan, wiring real models and the TUI plan view surface. Per
-`docs/planning/PLANNING_STEPS.md`, that closes the Planning gate; the recommended
-next feature is roadmap #3 (Workspaces) or a lean-slice handoff to #7.
+request → approved plan, wiring real models. The dedicated TUI plan view is then a
+follow-up step (2.13), after which the Planning-complete gate (2.12, now) is
+re-checked with the TUI surface in place; the next feature after that is roadmap #3
+(Workspaces) or a lean-slice handoff to #7.

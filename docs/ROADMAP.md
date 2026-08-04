@@ -60,12 +60,15 @@ Detailed substeps and per-step decisions live in
       AI-assessed score)
       (`docs/planning/PLAN_VALIDATION_METRICS_DESIGN.md` / `PLAN_VALIDATION_METRICS_REPORT.md`)
 - [x] Step 2.11 — User Review / approval gate (status transitions; schema-
-      preserving `user_edit`; on-disk + dedicated TUI plan view, editable via
-      prompts) (`docs/planning/PLAN_USER_REVIEW_DESIGN.md` / `PLAN_USER_REVIEW_REPORT.md`)
+      preserving `user_edit`; on-disk editable plan)
+      (`docs/planning/PLAN_USER_REVIEW_DESIGN.md` / `PLAN_USER_REVIEW_REPORT.md`)
 - [ ] Step 2.12 — **Planning complete**: deterministic scheduler + execution
       overlay (plan content vs state split); hybrid trigger (`/plan` + complexity
       auto-engage via deterministic pre-filter + cheap-model AI judgment);
       end-to-end request→approved plan (full execution engine is roadmap #7)
+- [ ] Step 2.13 — TUI Plan View (dedicated plan review surface: plan list + drill-in
+      DAG/task view; prompt-driven `user_edit` + approval in the TUI)
+      (`docs/planning/PLANNING_STEPS.md` Step 2.13)
 
 ## The roadmap (build order)
 
@@ -144,10 +147,12 @@ Detailed substeps and per-step decisions live in
   (`applyPlanEdit`/`parsePlanEdit`, ops rename/repurpose/add_dependency/remove_dependency/merge/split/
   add_constraint/set_policy, each DAG- + schema-guarded and bumping a `user_edit`
   revision) behind the `orchestration.plan.edit` capability; and the deterministic
-  plan view (`renderPlanView`/`renderPlanDag`, the TUI's shared view source).
+  plan view (`renderPlanView`/`renderPlanDag`, the shared review view source the
+  TUI consumes in 2.13).
   194 unit tests green, repo check green. Next: the minimal deterministic
   scheduler + execution overlay + end-to-end request→approved plan, which wires
-  the orchestrator, real model routing, and the TUI plan view surface (Step 2.12).
+  the orchestrator and real model routing (Step 2.12); the dedicated TUI plan view
+  is then a follow-up step (2.13).
 - Step cadence: one capability or service per step. Every step's report ends
   with a "Recommended Next Step" section that picks the next cheapest
   validation, grounded in the design docs — this is how steps 1.3–1.10 were

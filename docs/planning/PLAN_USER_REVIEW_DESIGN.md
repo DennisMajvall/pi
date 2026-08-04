@@ -30,7 +30,7 @@ Three behaviors, all **deterministic** (never an AI decision):
    `PlanSchema` and stays a DAG (a cycle-inducing edit is rejected).
 3. **A dedicated plan view** — a deterministic, textual render of the plan (head,
    task list, DAG outline, revision history) that is the shared view source for the
-   on-disk review and the TUI plan view (2.12 wiring surfaces it to the agent loop).
+   on-disk review and the TUI plan view (2.13).
 
 ## 2. Placement
 
@@ -101,20 +101,18 @@ gate, metrics), constraints, assumptions, task list (with deps), the DAG as an
 indented outline (`renderPlanDag`, using 2.10 `analyzeDag` diagnostics, with a
 per-path cycle guard), and the revision history (`renderRevisionHistory`). Pure and
 deterministic — it is the shared view source for on-disk review and the TUI plan
-view.
+view (2.13).
 
 ## 6. TUI surface — decision
 
 The architecture §15 open question ("Approval UX: inline editor vs selector; how to
-render the DAG") is settled by this step as: **the interactive TUI widget is the
-2.12 wiring surface.** This step ships the deterministic platform core — the gate,
-the editable plan, and the textual DAG/task renderer — which is exactly what the TUI
-plan view displays and what 2.12's agent-loop integration ("surfaces the approved
-plan for review through the TUI plan view", PLANNING_STEPS Step 2.12) consumes.
-Prior steps (2.1–2.10) stayed purely in `packages/platform`; the interactive TUI
-widget (pane/command binding + prompt collection) is scoped to 2.12 alongside the
-orchestrator and real model wiring, keeping this step testable in `packages/platform`
-with no TUI-runtime coupling.
+render the DAG") is settled by this step as: **the interactive TUI widget is its own
+step (2.13).** This step ships the deterministic platform core — the gate, the
+editable plan, and the textual DAG/task renderer — which is exactly what the TUI
+plan view (PLANNING_STEPS Step 2.13) displays and drives. Prior steps (2.1–2.10)
+stayed purely in `packages/platform`; the interactive TUI widget (pane/command
+binding + prompt collection) is a separate `packages/tui` follow-up (2.13), keeping
+this step testable in `packages/platform` with no TUI-runtime coupling.
 
 ## 7. Test plan
 

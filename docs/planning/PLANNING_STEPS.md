@@ -273,7 +273,7 @@ with the changed task ids (cycle-inducing edits are rejected; `repurpose` rewire
 downstream inputs; `merge` rewires dependents; `split` derives part ids).
 `renderPlanView`/`renderPlanDag` deterministically render the reviewable plan
 (including the indented DAG outline via 2.10 `analyzeDag`) — the shared view source
-for on-disk review and the TUI plan view (widget wiring is 2.12). 30 unit tests
+for on-disk review and the TUI plan view (the interactive TUI widget is 2.13). 30 unit tests
 green; repo `npm run check` green.
 
 ---
@@ -426,21 +426,17 @@ retry/degrade path) + Metrics set on the plan.
 **Arch refs:** §6.3.10 (human gate), §8 (status transitions `needs_review → approved`),
 §15 open question (interactive UX: inline editor vs selector; DAG rendering), §10.
 **Confirmed decisions:**
-- **Viewable and editable by the user, both on disk and in the TUI.** The on-disk
-  JSON (2.2) is the editable source of truth; the TUI is a dedicated plan view, not
-  just chat output.
-- **Dedicated TUI plan view** (a list plus a drill-in DAG/task view for a selected
-  plan) so richer features can be added later. The user interacts with it via
-  prompts ("merge/split/move/parallel…"), driving the schema-preserving `user_edit`
-  path — with the option to edit the JSON directly, which the TUI/agent pick up via
-  read-through (2.2).
+- **Viewable and editable by the user on disk.** The on-disk JSON (2.2) is the
+  editable source of truth; a plan is reviewable/editable in any editor and picked up
+  via read-through. The dedicated TUI plan view is its own step (2.13).
+- The deterministic plan view renderer (`renderPlanView`/`renderPlanDag`) ships here
+  as the shared review view source that the TUI (2.13) and any editor consume.
 **Decisions this step must make:**
 - Gate behavior per `policy.requireApproval` (default true for `planningDepth ≥ medium`).
 - The schema-preserving `user_edit` capability applying conversational edits and
   bumping `revisions`.
-- The TUI surface (command/pane binding) for rendering the DAG and collecting approval.
-**Deliverable:** approval flow that flips `needs_review → approved`, a working
-`user_edit` path, and a TUI plan view that renders and accepts prompts for changes.
+**Deliverable:** approval flow that flips `needs_review → approved` and a working
+`user_edit` path. The dedicated TUI plan view is Step 2.13.
 **Recommended next step:** the deterministic scheduler + end-to-end integration (2.12).
 
 ---
@@ -465,15 +461,62 @@ retry/degrade path) + Metrics set on the plan.
     model routing) that decides whether full planning is warranted. This deliberately
     keeps the cheap judgment off the expensive models used by later stages.
 - When it integrates with the agent loop: how an approved plan is surfaced for review
-  through the TUI plan view (see 2.11) and how the minimal scheduler demos
+  on disk (and via the TUI plan view, 2.13) and how the minimal scheduler demos
   plan→execution.
 **Gate — Planning complete:** a request reaches the pipeline via `/plan` or the
 complexity auto-trigger, flows through all of §6.3's stages into an approved plan
-(validated, with metrics, on-disk, reviewable, editable in TUI or any editor), and a
+(validated, with metrics, on-disk, reviewable, editable in any editor), and a
 minimal deterministic scheduler resolves a ready task to a capability execution. Full
-autonomous multi-task execution is roadmap #7.
+autonomous multi-task execution is roadmap #7; the dedicated TUI plan view is 2.13.
 **Recommended next step:** roadmap #3 (Workspaces) or, if execution depth is wanted
 first, a lean-slice handoff to #7 Task/Execution Engine.
+
+---
+
+## Step 2.13 — TUI Plan View (dedicated plan review surface)
+
+**Arch refs:** §6.3.10 (human gate), §15 open question (approval UX: inline editor vs
+selector; DAG rendering), §16 (plans are capability-owned persisted docs).
+**Moved here from:** Step 2.11's dedicated TUI plan-view decision + its
+`orchestration.plan.review` TUI surface; Step 2.12's "surface the approved plan
+through the TUI plan view" + the "editable in TUI" clause of the Planning-complete
+gate. The 2.11 platform core (gate, `user_edit`, `renderPlanView`/`renderPlanDag`) is
+the surface this step consumes; 2.13 is the `packages/tui` interactive widget on top
+of it.
+**Confirmed decisions (carried over from 2.11):**
+- **Dedicated TUI plan view** — a list of plans plus a drill-in DAG/task view for a
+  selected plan — so richer features can be added later. The user interacts via
+  prompts ("merge/split/move/parallel…"), driving the schema-preserving `user_edit`
+  path, with the option to edit the JSON directly (read-through, 2.2).
+- The view renders the deterministic 2.11 plan view (`renderPlanView`/`renderPlanDag`)
+  and drives the `orchestration.plan.review` / `orchestration.plan.edit` capabilities.
+**Settled decisions (2.13):**
+- **Entry/exit:** open via the `/plan` flow offering to open the view plus a
+  keybinding that opens the plan list; `Esc`/quit returns to chat. The exact binding
+  follows `packages/tui` keybinding conventions.
+- **Navigation:** a `select-list` of plans (title, status, revision, metrics) → `Enter`
+  drills into a selected plan → `Esc` returns to the list → `Esc` again returns to chat.
+- **DAG rendering:** `renderPlanDag`'s indented outline is the base, shown alongside a
+  selectable task list; selecting a task surfaces its detail (purpose/deliverable/
+  verification/requiredCapabilities) in a side pane — drill-in with no custom graph
+  renderer, reusing the 2.11 renderer as source of truth.
+- **Edit routing:** a prompt/input line *inside* the plan view routes "merge t3 and
+  t4"-style directives through `parsePlanEdit`/`orchestration.plan.edit`, then
+  re-renders from disk (read-through). External-editor JSON editing stays available.
+- **Approval:** an explicit approve action (visible hint + keybinding or `approve`
+  command) calls `orchestration.plan.review` (`approve`); status updates via
+  read-through, with `plan.approved` on the bus.
+- **Freshness:** re-read from the store on every render/navigation/action (read-through
+  guarantees freshness at read time) + a manual refresh. `fs.watch`/event replay is
+  deferred to roadmap #4 (absorbs M19) — no change-watching in 2.13.
+**Scope:** `packages/tui` interactive widget on top of the finished 2.11 platform core.
+No new `packages/platform` work is expected beyond a small list-for-display helper if
+the TUI needs one.
+**Deliverable:** a dedicated TUI plan view that lists plans, renders the selected
+plan's DAG + tasks (via the 2.11 renderer), accepts prompt-driven `user_edit`
+changes, and collects approvals — usable as the Planning-complete review surface.
+**Recommended next step:** re-open the Planning-complete gate check (2.12) with the
+TUI surface in place, then roadmap #3 (Workspaces) or a lean-slice handoff to #7.
 
 ---
 
