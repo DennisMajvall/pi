@@ -1,24 +1,72 @@
 /**
  * Walking-skeleton FileSystemService.
  *
- * A thin wrapper over node:fs for the methods the pilot capability needs
- * (read / readBytes / exists / stat / resolve / getWorkspaceRoot). All other
- * methods throw "not implemented".
+ * A thin wrapper over node:fs for the methods the pilot capabilities need:
+ * read / readBytes / exists / stat / resolve / getWorkspaceRoot, plus (Step
+ * 1.8) the read-side directory operations list / glob that the find and ls
+ * tools consume. The write surface (write / append / delete / mkdir / copy /
+ * move / watch) still throws "not implemented".
  *
  * This service delegates to node:fs directly — the same filesystem the read
  * tool already used — so behaviour is unchanged while the injection point is
  * real.
+ *
+ * glob is a deterministic minimatch walk: the pattern is evaluated with
+ * standard glob semantics (dotfile rule, `**` crossing segment boundaries),
+ * workspace-relative by default and cwd-agnostic for absolute patterns (see
+ * docs/RUNTIME_KERNEL_DESIGN.md). The walk root is the pattern's literal
+ * (magic-free) prefix, so the search never traverses parts of the tree the
+ * pattern cannot reach.
  */
 
-import { access as fsAccess, readFile as fsReadFile, stat as fsStat } from "node:fs/promises";
-import { isAbsolute, resolve as resolvePath } from "node:path";
+import type { Dirent, Stats } from "node:fs";
+import { access as fsAccess, readdir as fsReaddir, readFile as fsReadFile, stat as fsStat } from "node:fs/promises";
+import { isAbsolute, join, relative as relativePath, resolve as resolvePath, sep } from "node:path";
+import { minimatch } from "minimatch";
 import { PlatformError } from "../error/index.ts";
-import type { FileStat, FileSystemService } from "../service/index.ts";
+import type {
+	CopyOptions,
+	DeleteOptions,
+	FileStat,
+	FileSystemService,
+	GlobOptions,
+	ListOptions,
+	MkdirOptions,
+	WatchHandle,
+	WatchListener,
+	WriteOptions,
+} from "../service/index.ts";
 
 function notImplemented(method: string): never {
 	throw new PlatformError(`FileSystemService.${method} is not implemented in the walking skeleton`, {
 		code: "NOT_IMPLEMENTED",
 	});
+}
+
+/** The first glob-magic character index (skipping backslash escapes). */
+function firstMagicIndex(pattern: string): number {
+	for (let i = 0; i < pattern.length; i++) {
+		const ch = pattern[i];
+		if (ch === "\\") {
+			i++;
+			continue;
+		}
+		if (ch === "*" || ch === "?" || ch === "[" || ch === "{") {
+			return i;
+		}
+	}
+	return -1;
+}
+
+/** The literal (magic-free) prefix of a glob pattern, without trailing separators. */
+function literalPrefix(pattern: string): string {
+	const index = firstMagicIndex(pattern);
+	const prefix = index === -1 ? pattern : pattern.slice(0, index);
+	return prefix.replace(/[\\/]+$/, "");
+}
+
+function toPosix(value: string): string {
+	return value.split(sep).join("/");
 }
 
 export class NodeFileSystemService implements FileSystemService {
@@ -65,8 +113,152 @@ export class NodeFileSystemService implements FileSystemService {
 
 	async stat(path: string): Promise<FileStat> {
 		const stats = await fsStat(this.resolve(path));
+		return this.toFileStat(this.resolve(path), stats);
+	}
+
+	async list(path: string, options: ListOptions = {}): Promise<FileStat[]> {
+		const resolved = this.resolve(path);
+		const results: FileStat[] = [];
+		const walk = async (dir: string): Promise<void> => {
+			const entries = await fsReaddir(dir, { withFileTypes: true });
+			entries.sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
+			for (const entry of entries) {
+				if (!options.includeHidden && entry.name.startsWith(".")) {
+					continue;
+				}
+				const fullPath = join(dir, entry.name);
+				const stats = await fsStat(fullPath);
+				const stat = this.toFileStat(fullPath, stats);
+				if (options.filter && !options.filter(stat)) {
+					continue;
+				}
+				results.push(stat);
+				if (options.recursive && stats.isDirectory()) {
+					await walk(fullPath);
+				}
+			}
+		};
+		await walk(resolved);
+		results.sort((a, b) => a.path.localeCompare(b.path));
+		return results;
+	}
+
+	async glob(pattern: string, options: GlobOptions = {}): Promise<string[]> {
+		const posixPattern = toPosix(pattern);
+		const absolutePattern = isAbsolute(posixPattern);
+		const prefix = literalPrefix(posixPattern);
+		const walkRoot = absolutePattern ? prefix || "/" : join(this.workspaceRoot, prefix);
+		const ignore = options.ignore ?? [];
+
+		// A literal (magic-free) pattern names one entry: the walk root itself.
+		if (firstMagicIndex(posixPattern) === -1) {
+			const candidate = absolutePattern ? toPosix(walkRoot) : toPosix(relativePath(this.workspaceRoot, walkRoot));
+			try {
+				const stats = await fsStat(walkRoot);
+				if (options.nodir && stats.isDirectory()) {
+					return [];
+				}
+				const excludes = (entry: string): boolean =>
+					ignore.some((item) => minimatch(entry, item) || minimatch(entry, item.replace(/\/\*\*$/, "")));
+				if (excludes(candidate)) {
+					return [];
+				}
+				return options.absolute || absolutePattern ? [toPosix(walkRoot)] : [candidate];
+			} catch {
+				return [];
+			}
+		}
+
+		// A directory whose path matches an ignore pattern must not be
+		// descended into; `**/node_modules/**` only matches contents, so the
+		// trailing `/**` is stripped to also catch the directory itself.
+		const ignoreDirPatterns = ignore.map((entry) => entry.replace(/\/\*\*$/, ""));
+
+		const matchesIgnore = (candidate: string): boolean =>
+			ignore.some((entry) => minimatch(candidate, entry) || minimatch(candidate, entry.replace(/\/\*\*$/, "")));
+
+		// Directories the walk should not descend into: ignored dirs, and
+		// hidden dirs the pattern cannot reach (a `**` segment or an explicit
+		// dot-leading segment is required to match inside a dot-directory).
+		const skipDescend = (relativePosix: string): boolean => {
+			const relNoSlash = relativePosix.replace(/\/+$/, "");
+			if (ignoreDirPatterns.some((entry) => minimatch(relNoSlash, entry))) {
+				return true;
+			}
+			if (relNoSlash.startsWith(".")) {
+				return !(posixPattern.includes("**") || hasDotSegment(posixPattern));
+			}
+			return false;
+		};
+
+		const results: string[] = [];
+		const walk = async (dir: string): Promise<void> => {
+			let entries: Dirent[];
+			try {
+				entries = await fsReaddir(dir, { withFileTypes: true });
+			} catch {
+				return; // unreadable directory (e.g. permissions): not a match surface
+			}
+			entries.sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
+			for (const entry of entries) {
+				const fullPath = join(dir, entry.name);
+				const candidate = absolutePattern ? toPosix(fullPath) : toPosix(relativePath(this.workspaceRoot, fullPath));
+				if (matchesIgnore(candidate)) {
+					continue;
+				}
+				if (entry.isDirectory()) {
+					if (skipDescend(candidate)) {
+						continue;
+					}
+					if (!options.nodir && minimatch(candidate, posixPattern)) {
+						results.push(candidate);
+					}
+					if (posixPattern.includes("**")) {
+						await walk(fullPath);
+					}
+					continue;
+				}
+				if (minimatch(candidate, posixPattern)) {
+					results.push(candidate);
+				}
+			}
+		};
+		await walk(walkRoot);
+		results.sort((a, b) => a.localeCompare(b));
+		return options.absolute || absolutePattern ? results.map((entry) => this.resolve(entry)) : results;
+	}
+
+	async write(_path: string, _content: string | Uint8Array, _options?: WriteOptions): Promise<void> {
+		notImplemented("write");
+	}
+
+	async append(_path: string, _content: string): Promise<void> {
+		notImplemented("append");
+	}
+
+	async delete(_path: string, _options?: DeleteOptions): Promise<void> {
+		notImplemented("delete");
+	}
+
+	async mkdir(_path: string, _options?: MkdirOptions): Promise<void> {
+		notImplemented("mkdir");
+	}
+
+	async copy(_source: string, _dest: string, _options?: CopyOptions): Promise<void> {
+		notImplemented("copy");
+	}
+
+	async move(_source: string, _dest: string): Promise<void> {
+		notImplemented("move");
+	}
+
+	watch(_path: string, _listener: WatchListener): WatchHandle {
+		notImplemented("watch");
+	}
+
+	private toFileStat(path: string, stats: Stats): FileStat {
 		return {
-			path: this.resolve(path),
+			path,
 			name: path.split(/[\\/]/).pop() ?? path,
 			isFile: stats.isFile(),
 			isDirectory: stats.isDirectory(),
@@ -75,40 +267,13 @@ export class NodeFileSystemService implements FileSystemService {
 			createdAt: stats.ctimeMs,
 		};
 	}
+}
 
-	async write(): Promise<void> {
-		notImplemented("write");
-	}
-
-	async append(): Promise<void> {
-		notImplemented("append");
-	}
-
-	async delete(): Promise<void> {
-		notImplemented("delete");
-	}
-
-	async list(): Promise<FileStat[]> {
-		notImplemented("list");
-	}
-
-	async glob(): Promise<string[]> {
-		notImplemented("glob");
-	}
-
-	async mkdir(): Promise<void> {
-		notImplemented("mkdir");
-	}
-
-	async copy(): Promise<void> {
-		notImplemented("copy");
-	}
-
-	async move(): Promise<void> {
-		notImplemented("move");
-	}
-
-	watch(): never {
-		notImplemented("watch");
-	}
+/**
+ * Whether a glob pattern contains a segment that starts with a dot
+ * (e.g. `.*`, `.git/**`), i.e. could match hidden entries below the current
+ * level when combined with a `**` walk.
+ */
+function hasDotSegment(pattern: string): boolean {
+	return pattern.split("/").some((segment) => segment.startsWith(".") && segment.length > 1);
 }

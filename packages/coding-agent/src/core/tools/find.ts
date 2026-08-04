@@ -17,7 +17,7 @@ function toPosixPath(value: string): string {
 	return value.split(path.sep).join("/");
 }
 
-const findSchema = Type.Object({
+export const findSchema = Type.Object({
 	pattern: Type.String({
 		description: "Glob pattern to match files, e.g. '*.ts', '**/*.json', or 'src/**/*.spec.ts'",
 	}),

@@ -18,6 +18,8 @@ import { SessionManager } from "../src/core/session-manager.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
 import {
 	ensurePlatformRuntime,
+	getPlatformFindToolDefinition,
+	getPlatformLsToolDefinition,
 	getPlatformReadToolDefinition,
 	getPlatformRuntime,
 	shutdownPlatformRuntime,
@@ -239,5 +241,47 @@ describe("coding-agent consumption adapter", () => {
 
 		const sessionService = kernel.services.session as SessionManagerService;
 		expect(sessionService.getBootSession().id).toBe(sessionId(manager.getSessionId()));
+	});
+
+	it("builds a working AgentSession find ToolDefinition from registry exports", async () => {
+		await ensurePlatformRuntime();
+		const dir = makeTempDir();
+		writeFileSync(join(dir, "x.ts"), "");
+
+		const definition = getPlatformFindToolDefinition(dir, { sessionId: "test" });
+		expect(definition).toBeDefined();
+		expect(definition?.name).toBe("find");
+		expect(typeof definition?.renderCall).toBe("function");
+		expect(typeof definition?.renderResult).toBe("function");
+
+		const result = await definition!.execute(
+			"call-find-1",
+			{ pattern: "*.ts", path: dir },
+			undefined,
+			undefined,
+			undefined as unknown as ExtensionContext,
+		);
+		const text = (result.content as Array<{ type: string; text?: string }>).map((p) => p.text ?? "").join("");
+		expect(text).toContain("x.ts");
+	});
+
+	it("builds a working AgentSession ls ToolDefinition from registry exports", async () => {
+		await ensurePlatformRuntime();
+		const dir = makeTempDir();
+		writeFileSync(join(dir, "entry.txt"), "");
+
+		const definition = getPlatformLsToolDefinition(dir, { sessionId: "test" });
+		expect(definition).toBeDefined();
+		expect(definition?.name).toBe("ls");
+
+		const result = await definition!.execute(
+			"call-ls-1",
+			{ path: dir },
+			undefined,
+			undefined,
+			undefined as unknown as ExtensionContext,
+		);
+		const text = (result.content as Array<{ type: string; text?: string }>).map((p) => p.text ?? "").join("");
+		expect(text).toContain("entry.txt");
 	});
 });

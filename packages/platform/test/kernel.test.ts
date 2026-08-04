@@ -1,3 +1,6 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import type { CapabilityManifest, CapabilityRequires } from "../src/capability/index.ts";
 import { CapabilityState } from "../src/capability/index.ts";
@@ -176,6 +179,42 @@ describe("kernel: walking skeleton pipeline", () => {
 
 		expect(runtime.services.session).toBe(sessionStub);
 		expect(runtime.capabilities.getContext(capabilityId("tool.alpha"))?.session).toBe(sessionStub);
+	});
+
+	it("exposes glob/list through the capability context (real fs service)", async () => {
+		const dir = mkdtempSync(join(tmpdir(), "pi-kernel-fs-"));
+		try {
+			writeFileSync(join(dir, "a.md"), "");
+			mkdirSync(join(dir, "sub"));
+			writeFileSync(join(dir, "sub", "b.md"), "");
+			const fsQuery: BuiltinCapability = {
+				manifest: manifest("tool.fsquery", []),
+				factory: async (ctx) => ({
+					async init() {
+						return {
+							globbed: await ctx.fs.glob("**/*.md"),
+							listed: (await ctx.fs.list(".", { includeHidden: true })).map((s) => s.name),
+						};
+					},
+					async shutdown() {},
+				}),
+			};
+			runtime = createRuntime({
+				builtins: [fsQuery],
+				services: { workspaceRoot: dir },
+			});
+			await runtime.initialize();
+			await runtime.start();
+
+			const exports = runtime.capabilities.getExports<{ globbed: string[]; listed: string[] }>(
+				capabilityId("tool.fsquery"),
+			);
+			expect(exports?.globbed).toEqual(["a.md", "sub/b.md"]);
+			expect(exports?.listed).toContain("a.md");
+			expect(exports?.listed).toContain("sub");
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
 	});
 
 	it("reports missing dependencies without crashing", async () => {

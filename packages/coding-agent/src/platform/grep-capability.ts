@@ -13,20 +13,28 @@
  *   CapabilityContext registry (`ctx.capabilities.getExports`) and backs the
  *   grep tool's `readFile` operation with it. Shutdown runs in reverse order
  *   (grep unloads before read).
- * - No new service: the file side of grep (directory check + context reads)
- *   is backed by the existing FileSystemService (`stat`) and the read peer.
- *
- * Compromise (documented): the ripgrep search process itself is spawned by
- * the tool via node:child_process on both the legacy and platform paths —
- * GrepOperations only covers the file side, so there is no seam to move the
- * search behind.
+ * - Search seam (Step 1.8): `GrepOperations.search` routes the ripgrep
+ *   process behind the injected ProcessService (`ctx.process.spawn`), so the
+ *   search itself is platform-injected — the Step 1.5 compromise where rg
+ *   stayed host-side is retired.
  */
 
-import type { CapabilityManifest, ToolCapabilityExport } from "@earendil-works/pi-platform/capability";
+import type {
+	CapabilityContext,
+	CapabilityManifest,
+	ToolCapabilityExport,
+} from "@earendil-works/pi-platform/capability";
 import { capabilityId, capabilityVersion } from "@earendil-works/pi-platform/identifier";
 import type { BuiltinCapability } from "@earendil-works/pi-platform/kernel";
 import type { ExtensionContext } from "../core/extensions/types.ts";
-import { createGrepToolDefinition, type GrepOperations, type GrepToolInput, grepSchema } from "../core/tools/grep.ts";
+import {
+	createGrepToolDefinition,
+	type GrepOperations,
+	type GrepSearchOptions,
+	type GrepSearchProcess,
+	type GrepToolInput,
+	grepSchema,
+} from "../core/tools/grep.ts";
 
 const GREP_CAPABILITY_ID = capabilityId("tool.grep");
 const READ_CAPABILITY_ID = capabilityId("tool.read");
@@ -49,13 +57,13 @@ export const grepManifest: CapabilityManifest = {
 		},
 	},
 	requires: {
-		services: ["fs"],
+		services: ["fs", "process"],
 		// Peer-capability dependency: grep reads file contents for context
 		// lines via the read capability's readTextFile export. Hard dependency:
 		// grep cannot initialize without tool.read.
 		capabilities: [{ id: READ_CAPABILITY_ID, version: "*" }],
 	},
-	permissions: { fs: "read" },
+	permissions: { fs: "read", process: "spawn" },
 	compatibility: { runtime: ">=0.83.0", peers: {} },
 	metadata: {
 		name: "Grep Tool",
@@ -108,6 +116,9 @@ export const grepCapability: BuiltinCapability = {
 					const operations: GrepOperations = {
 						isDirectory: async (absolutePath) => (await toolCtx.capability.fs.stat(absolutePath)).isDirectory,
 						readFile: (absolutePath) => readExports.readTextFile(absolutePath),
+						// Search seam: the rg process is spawned and reaped through the
+						// injected ProcessService, not node:child_process.
+						search: createProcessServiceGrepSearch(toolCtx),
 					};
 
 					const definition = createGrepToolDefinition(toolCtx.cwd, { operations });
@@ -137,3 +148,78 @@ export const grepCapability: BuiltinCapability = {
 		},
 	}),
 };
+
+/**
+ * GrepOperations.search backed by the platform ProcessService.
+ *
+ * Spawns rg through the injected service (the kernel kills the process tree
+ * on abort), pumps the stdout Web Stream into newline-delimited JSON lines
+ * and stderr into text chunks, and resolves the exit code after the pumps
+ * drain so the last stderr chunk cannot be lost to the error-message race.
+ */
+function createProcessServiceGrepSearch(toolCtx: {
+	capability: CapabilityContext;
+}): (rgPath: string, args: string[], options: GrepSearchOptions) => GrepSearchProcess {
+	return (rgPath, args, options) => {
+		const handle = toolCtx.capability.process.spawn(rgPath, args, {
+			cwd: options.cwd,
+			signal: options.signal,
+			stdio: ["ignore", "pipe", "pipe"],
+		});
+		const linesPump = pumpLines(handle.stdout, options.onStdoutLine);
+		const stderrPump = pumpText(handle.stderr, options.onStderr);
+		return {
+			exited: handle.exited.then(async (code) => {
+				await linesPump;
+				await stderrPump;
+				return code;
+			}),
+			kill: () => {
+				void handle.kill();
+			},
+		};
+	};
+}
+
+/** Pump a Web Stream of bytes into newline-delimited line callbacks. */
+async function pumpLines(stream: ReadableStream<Uint8Array> | null, onLine: (line: string) => void): Promise<void> {
+	if (!stream) return;
+	const decoder = new TextDecoder();
+	const reader = stream.getReader();
+	let buffer = "";
+	try {
+		for (;;) {
+			const { done, value } = await reader.read();
+			if (done) break;
+			buffer += decoder.decode(value, { stream: true });
+			for (;;) {
+				const newlineIndex = buffer.indexOf("\n");
+				if (newlineIndex < 0) break;
+				const line = buffer.slice(0, newlineIndex);
+				buffer = buffer.slice(newlineIndex + 1);
+				onLine(line.endsWith("\r") ? line.slice(0, -1) : line);
+			}
+		}
+		buffer += decoder.decode();
+		if (buffer.length > 0) onLine(buffer);
+	} catch {
+		// Stream destroyed by exit handling; lines already delivered via onLine.
+	}
+}
+
+/** Pump a Web Stream of bytes into text chunks. */
+async function pumpText(stream: ReadableStream<Uint8Array> | null, onChunk: (chunk: string) => void): Promise<void> {
+	if (!stream) return;
+	const decoder = new TextDecoder();
+	const reader = stream.getReader();
+	try {
+		for (;;) {
+			const { done, value } = await reader.read();
+			if (done) break;
+			onChunk(decoder.decode(value, { stream: true }));
+		}
+		onChunk(decoder.decode());
+	} catch {
+		// Stream destroyed by exit handling; chunks already delivered via onChunk.
+	}
+}

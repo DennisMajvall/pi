@@ -48,7 +48,9 @@ import {
 import { getThemeByName, theme } from "../modes/interactive/theme/theme.ts";
 import {
 	getPlatformBashToolDefinition,
+	getPlatformFindToolDefinition,
 	getPlatformGrepToolDefinition,
+	getPlatformLsToolDefinition,
 	getPlatformReadToolDefinition,
 } from "../platform/platform-runtime.ts";
 import { stripFrontmatter } from "../utils/frontmatter.ts";
@@ -2592,6 +2594,18 @@ export class AgentSession {
 			});
 			if (platformGrep) {
 				baseToolDefinitions.grep = platformGrep;
+			}
+			const platformFind = getPlatformFindToolDefinition(this._cwd, {
+				sessionId: this.sessionManager.getSessionId(),
+			});
+			if (platformFind) {
+				baseToolDefinitions.find = platformFind;
+			}
+			const platformLs = getPlatformLsToolDefinition(this._cwd, {
+				sessionId: this.sessionManager.getSessionId(),
+			});
+			if (platformLs) {
+				baseToolDefinitions.ls = platformLs;
 			}
 		}
 

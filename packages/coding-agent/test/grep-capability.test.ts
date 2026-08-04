@@ -16,7 +16,13 @@ import { join } from "node:path";
 import type { ToolCapabilityExport } from "@earendil-works/pi-platform/capability";
 import { CapabilityState } from "@earendil-works/pi-platform/capability";
 import { capabilityId, sessionId } from "@earendil-works/pi-platform/identifier";
-import { type BuiltinCapability, createRuntime, type KernelRuntime } from "@earendil-works/pi-platform/kernel";
+import {
+	type BuiltinCapability,
+	createRuntime,
+	type KernelRuntime,
+	NodeProcessService,
+} from "@earendil-works/pi-platform/kernel";
+import type { ProcessHandle, ProcessService, SpawnOptions } from "@earendil-works/pi-platform/service";
 import { afterEach, describe, expect, it } from "vitest";
 import type { ExtensionContext } from "../src/core/extensions/types.ts";
 import { grepCapability } from "../src/platform/grep-capability.ts";
@@ -47,12 +53,26 @@ function writeFixture(dir: string, name = "fixture.txt"): string {
 	return file;
 }
 
+/** ProcessService spy: records every spawn (the search-seam proof). */
+class RecordingProcessService extends NodeProcessService {
+	readonly spawns: Array<{ command: string; args: string[] }> = [];
+
+	override spawn(command: string, args: string[], options: SpawnOptions = {}): ProcessHandle {
+		this.spawns.push({ command, args });
+		return super.spawn(command, args, options);
+	}
+}
+
 async function bootGrepKernel(
 	builtins: readonly BuiltinCapability[] = [readCapability, grepCapability],
+	processService?: ProcessService,
 ): Promise<KernelRuntime> {
 	const instance = createRuntime({
 		builtins,
-		services: { workspaceRoot: process.cwd() },
+		services: {
+			workspaceRoot: process.cwd(),
+			...(processService ? { process: processService } : {}),
+		},
 	});
 	await instance.initialize();
 	await instance.start();
@@ -102,8 +122,10 @@ describe("platform grep capability: full lifecycle with peer dependency", () => 
 		expect(grepInfo?.state).toBe(CapabilityState.Ready);
 		expect(grepInfo?.manifest.category).toBe("tool");
 		expect(grepInfo?.manifest.requires.services).toContain("fs");
+		expect(grepInfo?.manifest.requires.services).toContain("process");
 		expect(grepInfo?.manifest.requires.capabilities).toContainEqual({ id: READ_ID, version: "*" });
 		expect(grepInfo?.manifest.permissions.fs).toBe("read");
+		expect(grepInfo?.manifest.permissions.process).toBe("spawn");
 		// Dependency-aware init order: read was made ready before grep.
 		expect(readInfo?.loadedAt).toBeDefined();
 		expect(grepInfo?.loadedAt).toBeDefined();
@@ -294,6 +316,84 @@ describe("platform grep capability: execution", () => {
 		expect(result.success).toBe(true);
 		// Context-line reads went through the read peer, not the local fs.
 		expect(calls).toContain(file);
+	});
+});
+
+describe("platform grep search seam", () => {
+	it("spawns rg through the injected ProcessService, not node:child_process", async () => {
+		const recording = new RecordingProcessService();
+		kernel = await bootGrepKernel([readCapability, grepCapability], recording);
+		const dir = makeTempDir();
+		writeFixture(dir);
+		const tool = await grepToolExport(kernel);
+		const context = await grepCapabilityContext(kernel);
+
+		const result = await tool.execute(
+			{ pattern: "alpha" },
+			{
+				capability: context,
+				signal: new AbortController().signal,
+				sessionId: sessionId("test"),
+				cwd: dir,
+				metadata: {},
+			},
+		);
+		expect(result.success).toBe(true);
+		expect(outputText(result)).toContain("fixture.txt:1: alpha one");
+
+		// The search went through the platform ProcessService: exactly one
+		// spawn, the rg binary, with the JSON line-number args.
+		expect(recording.spawns.length).toBe(1);
+		expect(recording.spawns[0].command).toContain("rg");
+		expect(recording.spawns[0].args).toContain("--json");
+		expect(recording.spawns[0].args).toContain("--line-number");
+		expect(recording.spawns[0].args).toContain(dir);
+	});
+
+	it("kills the rg process through the seam when the match limit is reached", async () => {
+		kernel = await bootGrepKernel([readCapability, grepCapability]);
+		const dir = makeTempDir();
+		const file = join(dir, "many.txt");
+		writeFileSync(file, Array.from({ length: 500 }, (_, i) => `line alpha ${i + 1}`).join("\n"));
+		const tool = await grepToolExport(kernel);
+		const context = await grepCapabilityContext(kernel);
+
+		const result = await tool.execute(
+			{ pattern: "alpha", limit: 10 },
+			{
+				capability: context,
+				signal: new AbortController().signal,
+				sessionId: sessionId("test"),
+				cwd: dir,
+				metadata: {},
+			},
+		);
+		expect(result.success).toBe(true);
+		const text = outputText(result);
+		expect(text).toContain("10 matches limit reached");
+	});
+
+	it("rejects an already-aborted signal at entry", async () => {
+		kernel = await bootGrepKernel([readCapability, grepCapability]);
+		const dir = makeTempDir();
+		writeFixture(dir);
+		const tool = await grepToolExport(kernel);
+		const context = await grepCapabilityContext(kernel);
+		const controller = new AbortController();
+		controller.abort();
+
+		const result = await tool.execute(
+			{ pattern: "alpha" },
+			{
+				capability: context,
+				signal: controller.signal,
+				sessionId: sessionId("test"),
+				cwd: dir,
+				metadata: {},
+			},
+		);
+		expect(result.success).toBe(false);
+		expect(result.error).toContain("Operation aborted");
 	});
 });
 
