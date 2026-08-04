@@ -41,8 +41,9 @@ Detailed substeps and per-step decisions live in
       exec + retry + degrade path, and the planning event surface; one trivial
       stage end-to-end
       (`docs/planning/PLANNING_SKELETON_DESIGN.md` / `PLANNING_SKELETON_REPORT.md`)
-- [ ] Step 2.4 — Goal Analysis stage (cheap purpose-chosen model) + deterministic
+- [x] Step 2.4 — Goal Analysis stage (cheap purpose-chosen model) + deterministic
       Clarification Gate
+      (`docs/planning/GOAL_ANALYSIS_DESIGN.md` / `GOAL_ANALYSIS_REPORT.md`)
 - [ ] Step 2.5 — Execution Strategy Selection (first-class; emits `PlanningPolicy`)
 - [ ] Step 2.6 — Constraint Extraction (deterministic policy-downgrade rule)
 - [ ] Step 2.7 — Task Decomposition (unordered tasks + dedupe pass)
@@ -105,19 +106,20 @@ Detailed substeps and per-step decisions live in
   driven by a per-tool spec table, and the manifests' `provides.tool` prose
   is sourced from the tool templates (a fixture pins manifest↔tool equality).
   Next: Planning (`docs/PLANNING_ARCHITECTURE.md`).
-- Current position (Planning): Steps 2.1–2.3 complete — the canonical Plan object
+- Current position (Planning): Steps 2.1–2.4 complete — the canonical Plan object
   (Goal/Assumption/Constraint/Task/PlanningPolicy/Revision/Plan/Metrics +
   status & revision-reason enums) is a validated TypeBox schema in
   `@earendil-works/pi-platform` (`/plan` subpath); a `PlanStore` (`/kernel`) owns
   it as project/workspace-scoped on-disk JSON (`<root>/plans/<planId>.json`),
   read-through (no cache) with atomic writes and the §8 full-document revision
-  re-store; and a `/planning` subpath establishes the generic stage pattern —
-  stage contract + §11 strict-JSON runner (validate → one retry → degrade),
-  per-stage model routing (independent of the session model), stages as
-  `orchestration` capabilities with the store wired via the capability context,
-  the planning event surface, and one trivial stage run end-to-end (persists +
-  emits `plan.created`). 35 unit tests green, repo check green. Next: Goal
-  Analysis + the Clarification Gate (Step 2.4).
+  re-store; a `/planning` subpath establishes the generic stage pattern (stage
+  contract + §11 strict-JSON runner, per-stage model routing independent of the
+  session model, stages as `orchestration` capabilities, the planning event
+  surface, one trivial stage end-to-end); and the first real AI stage — Goal
+  Analysis (`orchestration.goal.analysis`), cheap-model routed, strict `Goal`
+  JSON — plus the deterministic §9 Clarification Gate (bounded rounds,
+  `proceed_with_unknowns` fallback). 43 unit tests green, repo check green.
+  Next: Execution Strategy Selection (Step 2.5).
 - Step cadence: one capability or service per step. Every step's report ends
   with a "Recommended Next Step" section that picks the next cheapest
   validation, grounded in the design docs — this is how steps 1.3–1.10 were

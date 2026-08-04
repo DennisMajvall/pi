@@ -114,6 +114,26 @@ the store, emits `plan.created`). 8 unit tests green; repo `npm run check` green
 `orchestration` capabilities, events).
 **Recommended next step:** the first real AI stage, Goal Analysis (2.4).
 
+## Step 2.4 — Goal Analysis + Clarification Gate — DONE
+
+**Report:** `docs/planning/GOAL_ANALYSIS_REPORT.md` · **Design:** `docs/planning/GOAL_ANALYSIS_DESIGN.md`
+
+**Implemented:** the first real AI planning stage in `@earendil-works/pi-platform/planning`
+(`packages/platform/src/planning/goal-analysis.ts` + `clarification-gate.ts`).
+`goalAnalysisStage(completion, routing?)` is an `orchestration` capability
+(`orchestration.goal.analysis`) producing strict `Goal` JSON against the 2.1
+`GoalSchema`, routed to a purpose-chosen cheap model via the `goal_analysis` key
+(decoupled from the session model), executed through the §11 `runStrictJsonStage`
+(mandatory — aborts with a stage-naming diagnostic on persistent invalid output).
+The deterministic `runClarificationGate(goal, opts)` decides `clear` /
+`needs_clarification` (surfacing `goal.clarificationQuestions`) /
+`proceed_with_unknowns` (unknowns → low-confidence `Assumption`s) within
+`maxRounds` (default 2), re-running Goal Analysis only on each loop pass. 8 unit
+tests green; repo `npm run check` green.
+
+**Arch refs:** §6.3.1 (Goal Analysis), §9 (clarification), §6.4.
+**Recommended next step:** Execution Strategy Selection (2.5).
+
 ---
 
 ## Step 2.2 — Plan store + scope + persistence

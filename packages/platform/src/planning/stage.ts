@@ -63,11 +63,49 @@ export interface StageModelRouting {
 	stages?: Record<string, string>;
 }
 
-/** Placeholder routing establishing the shape; real model ids are bound later. */
+/**
+ * The settings/config shape that defines per-stage model routing — the
+ * "where the model selector resolves from" (Planning Step 2.3). In the shipped
+ * product this mapping is populated from user settings (e.g. `planning.models.*`)
+ * by the coding-agent wiring, which passes the resulting `StageModelRouting`
+ * into the stage. The platform resolver itself is a pure lookup over that
+ * injected map; it does not own user settings.
+ */
+export interface StageModelSettings {
+	/** Model id used for stages without an explicit entry. */
+	default: string;
+	/** Stage key → model id. */
+	stages?: Record<string, string>;
+}
+
+/**
+ * Unconfigured placeholder. An AI stage must NOT run on this: `requireStageModel`
+ * refuses (loudly) when resolution yields no model id, so an unconfigured
+ * pipeline fails at startup rather than silently calling an empty model id.
+ */
 export const DEFAULT_STAGE_MODEL_ROUTING: StageModelRouting = {
 	default: "",
 	stages: {},
 };
+
+/** Derive `StageModelRouting` from a settings mapping (what the host passes into stages). */
+export function stageModelRoutingFromSettings(settings: StageModelSettings): StageModelRouting {
+	return { default: settings.default, stages: settings.stages };
+}
+
+/**
+ * Refuse to run an AI stage with no configured model. Guards against a stage
+ * resolving to an empty id when per-stage model routing was never configured.
+ */
+export function requireStageModel(stageKey: string, model: string): string {
+	if (!model) {
+		throw new Error(
+			`stage '${stageKey}': no model configured. Set per-stage model routing ` +
+				"(from user settings, e.g. planning.models.*) before running AI stages",
+		);
+	}
+	return model;
+}
 
 /** Resolve the model a stage should run on. */
 export function resolveStageModel(stageKey: string, routing: StageModelRouting): string {
