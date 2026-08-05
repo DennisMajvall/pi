@@ -184,7 +184,16 @@ export default function planViewExtension(pi: ExtensionAPI): void {
 				modelRuntime: ctx.modelRuntime,
 				model,
 			};
+			const modelLabel = `${model.provider ?? ""}/${model.id}`.replace(/^\//, "");
+			const setWorking = (message: string): void => {
+				ctx.ui.setWorkingMessage(message);
+				ctx.ui.setWorkingVisible(true);
+			};
+			const clearWorking = (): void => {
+				ctx.ui.setWorkingMessage();
+			};
 			try {
+				setWorking(`Planning with ${modelLabel}: ${request.slice(0, 60)}…`);
 				const plan = await generatePlan(base);
 				ctx.ui.notify(`Plan ${plan.id} approved — open with /plans`, "info");
 			} catch (error) {
@@ -196,14 +205,19 @@ export default function planViewExtension(pi: ExtensionAPI): void {
 						return;
 					}
 					try {
+						setWorking(`Planning with ${modelLabel}: ${request.slice(0, 60)}…`);
 						const plan = await generatePlan({ ...base, clarifyAnswers: answers });
 						ctx.ui.notify(`Plan ${plan.id} approved — open with /plans`, "info");
 					} catch (retryError) {
 						ctx.ui.notify(retryError instanceof Error ? retryError.message : String(retryError), "error");
+					} finally {
+						clearWorking();
 					}
 					return;
 				}
 				ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
+			} finally {
+				clearWorking();
 			}
 		},
 	});
