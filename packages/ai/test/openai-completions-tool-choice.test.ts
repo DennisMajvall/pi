@@ -9,11 +9,18 @@ const mockState = vi.hoisted(() => ({
 	chunks: undefined as
 		| Array<null | {
 				id?: string;
-				choices?: Array<{ delta: Record<string, unknown>; finish_reason: string | null; usage?: unknown }>;
+				choices?: Array<{
+					delta: Record<string, unknown>;
+					finish_reason: string | null;
+					usage?: unknown;
+				}>;
 				usage?: {
 					prompt_tokens: number;
 					completion_tokens: number;
-					prompt_tokens_details: { cached_tokens: number; cache_write_tokens?: number };
+					prompt_tokens_details: {
+						cached_tokens: number;
+						cache_write_tokens?: number;
+					};
 					completion_tokens_details: { reasoning_tokens: number };
 				};
 		  }>
@@ -144,7 +151,10 @@ describe("openai-completions tool_choice", () => {
 			} as unknown as Parameters<typeof streamSimple>[2],
 		).result();
 
-		const params = (payload ?? mockState.lastParams) as { tool_choice?: string; tools?: unknown[] };
+		const params = (payload ?? mockState.lastParams) as {
+			tool_choice?: string;
+			tools?: unknown[];
+		};
 		expect(params.tool_choice).toBe("required");
 		expect(Array.isArray(params.tools)).toBe(true);
 		expect(params.tools?.length ?? 0).toBeGreaterThan(0);
@@ -188,7 +198,9 @@ describe("openai-completions tool_choice", () => {
 			} as unknown as Parameters<typeof streamSimple>[2],
 		).result();
 
-		const params = (payload ?? mockState.lastParams) as { tools?: Array<{ function?: Record<string, unknown> }> };
+		const params = (payload ?? mockState.lastParams) as {
+			tools?: Array<{ function?: Record<string, unknown> }>;
+		};
 		const tool = params.tools?.[0]?.function;
 		expect(tool).toBeTruthy();
 		expect(tool?.strict).toBeUndefined();
@@ -196,7 +208,7 @@ describe("openai-completions tool_choice", () => {
 	});
 
 	it("maps groq qwen3 reasoning levels to default reasoning_effort", async () => {
-		const model = getModel("groq", "qwen/qwen3-32b")!;
+		const model = getModel("groq", "qwen/qwen3.6-27b")!;
 		let payload: unknown;
 
 		await streamSimple(
@@ -219,7 +231,9 @@ describe("openai-completions tool_choice", () => {
 			},
 		).result();
 
-		const params = (payload ?? mockState.lastParams) as { reasoning_effort?: string };
+		const params = (payload ?? mockState.lastParams) as {
+			reasoning_effort?: string;
+		};
 		expect(params.reasoning_effort).toBe("default");
 	});
 
@@ -247,7 +261,9 @@ describe("openai-completions tool_choice", () => {
 			},
 		).result();
 
-		const params = (payload ?? mockState.lastParams) as { reasoning_effort?: string };
+		const params = (payload ?? mockState.lastParams) as {
+			reasoning_effort?: string;
+		};
 		expect(params.reasoning_effort).toBe("medium");
 	});
 
@@ -284,7 +300,9 @@ describe("openai-completions tool_choice", () => {
 			},
 		).result();
 
-		const params = (payload ?? mockState.lastParams) as { tool_stream?: boolean };
+		const params = (payload ?? mockState.lastParams) as {
+			tool_stream?: boolean;
+		};
 		expect(params.tool_stream).toBe(true);
 	});
 
@@ -341,8 +359,14 @@ describe("openai-completions tool_choice", () => {
 				},
 			).result();
 
-			const params = (payload ?? mockState.lastParams) as { thinking?: unknown; reasoning_effort?: string };
-			expect(params.thinking).toEqual({ type: "enabled", clear_thinking: false });
+			const params = (payload ?? mockState.lastParams) as {
+				thinking?: unknown;
+				reasoning_effort?: string;
+			};
+			expect(params.thinking).toEqual({
+				type: "enabled",
+				clear_thinking: false,
+			});
 			expect(params.reasoning_effort).toBe(testCase.effort);
 		}
 	});
@@ -355,8 +379,17 @@ describe("openai-completions tool_choice", () => {
 			provider: "zai",
 			model: "glm-5.2",
 			content: [
-				{ type: "thinking", thinking: "prior reasoning", thinkingSignature: "reasoning_content" },
-				{ type: "toolCall", id: "call_1", name: "read", arguments: { path: "README.md" } },
+				{
+					type: "thinking",
+					thinking: "prior reasoning",
+					thinkingSignature: "reasoning_content",
+				},
+				{
+					type: "toolCall",
+					id: "call_1",
+					name: "read",
+					arguments: { path: "README.md" },
+				},
 			],
 			usage: {
 				input: 0,
@@ -403,7 +436,9 @@ describe("openai-completions tool_choice", () => {
 			thinking?: unknown;
 		};
 		const replayedAssistant = params.messages?.find((message) => message.role === "assistant");
-		expect(replayedAssistant).toMatchObject({ reasoning_content: "prior reasoning" });
+		expect(replayedAssistant).toMatchObject({
+			reasoning_content: "prior reasoning",
+		});
 		expect(params.thinking).toEqual({ type: "enabled", clear_thinking: false });
 	});
 
@@ -430,7 +465,10 @@ describe("openai-completions tool_choice", () => {
 			},
 		).result();
 
-		const params = (payload ?? mockState.lastParams) as { thinking?: unknown; reasoning_effort?: string };
+		const params = (payload ?? mockState.lastParams) as {
+			thinking?: unknown;
+			reasoning_effort?: string;
+		};
 		expect(params.thinking).toEqual({ type: "disabled" });
 		expect(params.reasoning_effort).toBeUndefined();
 	});
@@ -475,7 +513,9 @@ describe("openai-completions tool_choice", () => {
 			},
 		).result();
 
-		const params = (payload ?? mockState.lastParams) as { tool_stream?: boolean };
+		const params = (payload ?? mockState.lastParams) as {
+			tool_stream?: boolean;
+		};
 		expect(params.tool_stream).toBe(true);
 	});
 
@@ -502,7 +542,9 @@ describe("openai-completions tool_choice", () => {
 			},
 		).result();
 
-		const params = (payload ?? mockState.lastParams) as { tool_stream?: boolean };
+		const params = (payload ?? mockState.lastParams) as {
+			tool_stream?: boolean;
+		};
 		expect(params.tool_stream).toBeUndefined();
 	});
 
@@ -632,7 +674,13 @@ describe("openai-completions tool_choice", () => {
 		const response = await streamSimple(
 			model,
 			{
-				messages: [{ role: "user", content: "Reply with a complete answer", timestamp: Date.now() }],
+				messages: [
+					{
+						role: "user",
+						content: "Reply with a complete answer",
+						timestamp: Date.now(),
+					},
+				],
 			},
 			{ apiKey: "test" },
 		).result();
@@ -913,7 +961,10 @@ describe("openai-completions tool_choice", () => {
 			{
 				name: "grep",
 				description: "Search a file",
-				parameters: Type.Object({ pattern: Type.String(), path: Type.String() }),
+				parameters: Type.Object({
+					pattern: Type.String(),
+					path: Type.String(),
+				}),
 			},
 			{
 				name: "list",
@@ -923,7 +974,10 @@ describe("openai-completions tool_choice", () => {
 			{
 				name: "write",
 				description: "Write a file",
-				parameters: Type.Object({ path: Type.String(), content: Type.String() }),
+				parameters: Type.Object({
+					path: Type.String(),
+					content: Type.String(),
+				}),
 			},
 		];
 		const s = streamSimple(
@@ -990,7 +1044,10 @@ describe("openai-completions tool_choice", () => {
 		]);
 
 		expect(response.content).toHaveLength(6);
-		expect(response.content[0]).toEqual({ type: "text", text: "answer 1 answer 2\n" });
+		expect(response.content[0]).toEqual({
+			type: "text",
+			text: "answer 1 answer 2\n",
+		});
 		expect(response.content[1]).toEqual({
 			type: "thinking",
 			thinking: "think 1 think 2",
@@ -1145,7 +1202,14 @@ describe("openai-completions tool_choice", () => {
 			api: "openai-completions",
 			provider: "xiaomi",
 			model: "mimo-v2.5-pro",
-			content: [{ type: "toolCall", id: "call_1", name: "read", arguments: { path: "README.md" } }],
+			content: [
+				{
+					type: "toolCall",
+					id: "call_1",
+					name: "read",
+					arguments: { path: "README.md" },
+				},
+			],
 			usage: {
 				input: 0,
 				output: 0,
@@ -1191,7 +1255,10 @@ describe("openai-completions tool_choice", () => {
 			reasoning_effort?: string;
 		};
 		const replayedAssistant = params.messages?.find((message) => message.role === "assistant");
-		expect(replayedAssistant).toMatchObject({ role: "assistant", reasoning_content: "" });
+		expect(replayedAssistant).toMatchObject({
+			role: "assistant",
+			reasoning_content: "",
+		});
 		expect(params.thinking).toEqual({ type: "enabled" });
 		expect(params.reasoning_effort).toBe("high");
 	});
@@ -1252,7 +1319,10 @@ describe("openai-completions tool_choice", () => {
 
 	it("replays OpenCode Go reasoning thinking blocks as reasoning_content", () => {
 		const { compat: _compat, ...baseModel } = getModel("opencode-go", "kimi-k2.6")!;
-		const model = { ...baseModel, api: "openai-completions" } as Model<"openai-completions">;
+		const model = {
+			...baseModel,
+			api: "openai-completions",
+		} as Model<"openai-completions">;
 		const messages = convertMessages(
 			model,
 			{
@@ -1263,8 +1333,17 @@ describe("openai-completions tool_choice", () => {
 						provider: "opencode-go",
 						model: "kimi-k2.6",
 						content: [
-							{ type: "thinking", thinking: "think", thinkingSignature: "reasoning" },
-							{ type: "toolCall", id: "call_1", name: "read", arguments: { path: "README.md" } },
+							{
+								type: "thinking",
+								thinking: "think",
+								thinkingSignature: "reasoning",
+							},
+							{
+								type: "toolCall",
+								id: "call_1",
+								name: "read",
+								arguments: { path: "README.md" },
+							},
 						],
 						usage: {
 							input: 0,
@@ -1272,7 +1351,13 @@ describe("openai-completions tool_choice", () => {
 							cacheRead: 0,
 							cacheWrite: 0,
 							totalTokens: 0,
-							cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+							cost: {
+								input: 0,
+								output: 0,
+								cacheRead: 0,
+								cacheWrite: 0,
+								total: 0,
+							},
 						},
 						stopReason: "stop",
 						timestamp: Date.now(),
@@ -1304,7 +1389,10 @@ describe("openai-completions tool_choice", () => {
 			},
 		);
 
-		expect(messages[0]).toMatchObject({ role: "assistant", reasoning_content: "think" });
+		expect(messages[0]).toMatchObject({
+			role: "assistant",
+			reasoning_content: "think",
+		});
 		expect(messages[0]).not.toHaveProperty("reasoning");
 	});
 
@@ -1325,7 +1413,10 @@ describe("openai-completions tool_choice", () => {
 			},
 		).result();
 
-		const params = (payload ?? mockState.lastParams) as { thinking?: unknown; reasoning_effort?: string };
+		const params = (payload ?? mockState.lastParams) as {
+			thinking?: unknown;
+			reasoning_effort?: string;
+		};
 		expect(params.thinking).toEqual({ type: "disabled" });
 		expect(params.reasoning_effort).toBeUndefined();
 	});
@@ -1348,7 +1439,10 @@ describe("openai-completions tool_choice", () => {
 			},
 		).result();
 
-		const params = (payload ?? mockState.lastParams) as { thinking?: unknown; reasoning_effort?: string };
+		const params = (payload ?? mockState.lastParams) as {
+			thinking?: unknown;
+			reasoning_effort?: string;
+		};
 		expect(params.thinking).toEqual({ type: "enabled" });
 		expect(params.reasoning_effort).toBeUndefined();
 	});
@@ -1373,7 +1467,10 @@ describe("openai-completions tool_choice", () => {
 				},
 			).result();
 
-			const params = (payload ?? mockState.lastParams) as { thinking?: unknown; reasoning_effort?: string };
+			const params = (payload ?? mockState.lastParams) as {
+				thinking?: unknown;
+				reasoning_effort?: string;
+			};
 			expect(params.thinking).toBeUndefined();
 			expect(params.reasoning_effort).toBeUndefined();
 		}
@@ -1396,7 +1493,10 @@ describe("openai-completions tool_choice", () => {
 			},
 		).result();
 
-		const params = (payload ?? mockState.lastParams) as { thinking?: unknown; reasoning_effort?: string };
+		const params = (payload ?? mockState.lastParams) as {
+			thinking?: unknown;
+			reasoning_effort?: string;
+		};
 		expect(params.thinking).toEqual({ type: "disabled" });
 		expect(params.reasoning_effort).toBeUndefined();
 	});
@@ -1422,7 +1522,10 @@ describe("openai-completions tool_choice", () => {
 				},
 			).result();
 
-			const params = (payload ?? mockState.lastParams) as { max_tokens?: number; max_completion_tokens?: number };
+			const params = (payload ?? mockState.lastParams) as {
+				max_tokens?: number;
+				max_completion_tokens?: number;
+			};
 			expect(params.max_tokens).toBe(123);
 			expect(params.max_completion_tokens).toBeUndefined();
 		}
@@ -1449,7 +1552,10 @@ describe("openai-completions tool_choice", () => {
 				},
 			).result();
 
-			const params = (payload ?? mockState.lastParams) as { max_tokens?: number; max_completion_tokens?: number };
+			const params = (payload ?? mockState.lastParams) as {
+				max_tokens?: number;
+				max_completion_tokens?: number;
+			};
 			expect(params.max_tokens).toBe(123);
 			expect(params.max_completion_tokens).toBeUndefined();
 		}
@@ -1473,7 +1579,9 @@ describe("openai-completions tool_choice", () => {
 			},
 		).result();
 
-		const params = (payload ?? mockState.lastParams) as { reasoning_effort?: string };
+		const params = (payload ?? mockState.lastParams) as {
+			reasoning_effort?: string;
+		};
 		expect(params.reasoning_effort).toBeUndefined();
 	});
 
@@ -1568,7 +1676,10 @@ describe("openai-completions tool_choice", () => {
 						usage: {
 							prompt_tokens: 100,
 							completion_tokens: 5,
-							prompt_tokens_details: { cached_tokens: 50, cache_write_tokens: 30 },
+							prompt_tokens_details: {
+								cached_tokens: 50,
+								cache_write_tokens: 30,
+							},
 							completion_tokens_details: { reasoning_tokens: 0 },
 						},
 					},
@@ -1649,7 +1760,9 @@ describe("openai-completions tool_choice", () => {
 		]) {
 			const params = await captureSimpleParams(model, testCase.reasoning);
 
-			expect(params.chat_template_kwargs).toEqual({ thinking: testCase.expected });
+			expect(params.chat_template_kwargs).toEqual({
+				thinking: testCase.expected,
+			});
 			expect(params.thinking).toBeUndefined();
 			expect(params.reasoning_effort).toBeUndefined();
 		}
@@ -1698,7 +1811,10 @@ describe("openai-completions tool_choice", () => {
 
 		const params = await captureSimpleParams(model, "xhigh");
 
-		expect(params.chat_template_kwargs).toEqual({ preserve_thinking: true, reasoning_effort: "max" });
+		expect(params.chat_template_kwargs).toEqual({
+			preserve_thinking: true,
+			reasoning_effort: "max",
+		});
 		expect(params.reasoning_effort).toBeUndefined();
 	});
 
