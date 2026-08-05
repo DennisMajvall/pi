@@ -12,7 +12,11 @@ import { join } from "node:path";
 import type { Context, Model } from "@earendil-works/pi-ai";
 import { PlanStore } from "@earendil-works/pi-platform/kernel";
 import type { Plan } from "@earendil-works/pi-platform/plan";
-import { createPlanCapabilityRunner, type StageCompletion } from "@earendil-works/pi-platform/planning";
+import {
+	ClarificationRequiredError,
+	createPlanCapabilityRunner,
+	type StageCompletion,
+} from "@earendil-works/pi-platform/planning";
 import { afterEach, describe, expect, it } from "vitest";
 import type { ModelRuntime } from "../src/core/model-runtime.ts";
 import { createStageCompletion, generatePlan } from "../src/extensions/plan/index.ts";
@@ -138,6 +142,69 @@ describe("generatePlan via a real-model completion (2.13.5)", () => {
 		// Persisted on disk and visible through the /plans runner (read-through).
 		const loaded = await store.load(plan.id);
 		expect(loaded.status).toBe("approved");
+		const runner = createPlanCapabilityRunner({ store, events: fakeEvents });
+		expect((await runner.list()).map((entry) => entry.id)).toContain(plan.id);
+	});
+});
+
+describe("clarification flow (2.13.5)", () => {
+	function clarifyingRuntime(): ModelRuntime {
+		return {
+			completeSimple: async (_model: Model<any>, context: Context) => {
+				if (context.systemPrompt?.includes("Goal Analysis")) {
+					return {
+						role: "assistant" as const,
+						content: [
+							{
+								type: "text" as const,
+								text: JSON.stringify({
+									summary: "Ship a todo app",
+									successCriteria: ["deliverable-t1"],
+									unknowns: [],
+									requiresClarification: true,
+									clarificationQuestions: [{ question: "which framework?", blocking: true }],
+								}),
+							},
+						],
+					};
+				}
+				return {
+					role: "assistant" as const,
+					content: [{ type: "text" as const, text: stageJson(context.systemPrompt ?? "") }],
+				};
+			},
+		} as unknown as ModelRuntime;
+	}
+
+	it("throws ClarificationRequiredError when clarification is needed and no answers are given", async () => {
+		const root = makeRoot();
+		const store = new PlanStore({ rootDir: root });
+		await expect(
+			generatePlan({
+				request: "todo app",
+				store,
+				events: fakeEvents,
+				modelRuntime: clarifyingRuntime(),
+				model: fakeModel,
+			}),
+		).rejects.toBeInstanceOf(ClarificationRequiredError);
+	});
+
+	it("continues and persists an approved plan when answers are provided", async () => {
+		const root = makeRoot();
+		const store = new PlanStore({ rootDir: root });
+		const plan = await generatePlan({
+			request: "todo app",
+			store,
+			events: fakeEvents,
+			modelRuntime: clarifyingRuntime(),
+			model: fakeModel,
+			clarifyAnswers: { "which framework?": "vanilla js" },
+		});
+		expect(plan.status).toBe("approved");
+		// The answer is recorded as a user assumption.
+		expect(plan.assumptions.some((a) => a.statement.includes("vanilla js"))).toBe(true);
+		// The plan is persisted and visible to /plans.
 		const runner = createPlanCapabilityRunner({ store, events: fakeEvents });
 		expect((await runner.list()).map((entry) => entry.id)).toContain(plan.id);
 	});

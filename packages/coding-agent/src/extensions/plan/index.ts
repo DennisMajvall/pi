@@ -18,6 +18,7 @@ import { capabilityId } from "@earendil-works/pi-platform/identifier";
 import { PlanStore } from "@earendil-works/pi-platform/kernel";
 import type { Plan } from "@earendil-works/pi-platform/plan";
 import {
+	ClarificationRequiredError,
 	constraintExtractionStage,
 	createPlanCapabilityRunner,
 	criticStage,
@@ -84,6 +85,8 @@ export interface GeneratePlanOptions {
 	events: EventBusService;
 	modelRuntime: ModelRuntime;
 	model: Model<any>;
+	/** Answers to the goal's clarification questions (question → answer). */
+	clarifyAnswers?: Record<string, string>;
 }
 
 /**
@@ -106,8 +109,25 @@ export async function generatePlan(options: GeneratePlanOptions): Promise<Plan> 
 	const result = await runPlanningPipeline(options.request, stages, {
 		store: options.store,
 		events: options.events,
+		...(options.clarifyAnswers ? { clarifyAnswers: options.clarifyAnswers } : {}),
 	});
 	return result.plan;
+}
+
+/** Collect answers to a goal's blocking clarification questions (TUI input dialogs). */
+async function collectClarification(
+	ctx: ExtensionCommandContext,
+	questions: readonly { question: string; blocking: boolean }[],
+): Promise<Record<string, string> | undefined> {
+	const answers: Record<string, string> = {};
+	for (const q of questions) {
+		const answer = await ctx.ui.input(q.question, "answer");
+		if (answer === undefined || answer.trim().length === 0) {
+			return undefined; // user cancelled
+		}
+		answers[q.question] = answer.trim();
+	}
+	return answers;
 }
 
 export default function planViewExtension(pi: ExtensionAPI): void {
@@ -157,16 +177,32 @@ export default function planViewExtension(pi: ExtensionAPI): void {
 				return;
 			}
 			ctx.ui.notify(`Planning: ${request.slice(0, 60)}…`, "info");
+			const base: GeneratePlanOptions = {
+				request,
+				store: deps.store,
+				events: deps.events,
+				modelRuntime: ctx.modelRuntime,
+				model,
+			};
 			try {
-				const plan = await generatePlan({
-					request,
-					store: deps.store,
-					events: deps.events,
-					modelRuntime: ctx.modelRuntime!,
-					model,
-				});
+				const plan = await generatePlan(base);
 				ctx.ui.notify(`Plan ${plan.id} approved — open with /plans`, "info");
 			} catch (error) {
+				if (error instanceof ClarificationRequiredError) {
+					ctx.ui.notify("The goal needs a few answers before planning can continue…", "info");
+					const answers = await collectClarification(ctx, error.questions);
+					if (!answers) {
+						ctx.ui.notify("Planning cancelled", "warning");
+						return;
+					}
+					try {
+						const plan = await generatePlan({ ...base, clarifyAnswers: answers });
+						ctx.ui.notify(`Plan ${plan.id} approved — open with /plans`, "info");
+					} catch (retryError) {
+						ctx.ui.notify(retryError instanceof Error ? retryError.message : String(retryError), "error");
+					}
+					return;
+				}
 				ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
 			}
 		},
