@@ -311,6 +311,32 @@ repo `npm run check` green. The dedicated TUI plan view is Step 2.13.
 
 ---
 
+## Step 2.13 — TUI Plan View (dedicated plan review surface) — DONE
+
+**Report:** `docs/planning/PLAN_TUI_PLAN_VIEW_REPORT.md` · **Design:** `docs/planning/PLAN_TUI_PLAN_VIEW_DESIGN.md`
+
+**Implemented:** the dedicated TUI plan review surface as a `packages/coding-agent`
+extension — `/plans` renders a pi-tui `PlanViewComponent` via `ctx.ui.custom` (the
+idiomatic extension path, same as the built-in llama dialog), on top of the platform
+core: `PlanCapabilityRunner` (`plan-capability.ts`) drives a headless `PlanViewWidget`
+controller (`plan-view-widget.ts`, semantic actions + `render(width)`), and the thin
+`PlanViewComponent` maps raw terminal keys → actions. It lists `<workspace>/plans`
+(read-through), drills into a plan's selectable task list + a task-detail pane + the 2.11
+DAG outline, routes prompt-driven directives through `parsePlanEdit`/`user_edit`
+(schema-preserving; rejected-cycle edits surface an inline error), and collects `a`
+approvals (`needs_review → approved` via the 2.11 gate, `plan.approved` on the bus);
+`esc` returns to chat and `r` refreshes. The platform already exports `./planning` and
+`packages/coding-agent` resolves it from source via the root `tsconfig` path-map (plus
+the existing vitest alias) — no dist coupling, works across rebuilds. The
+**Planning-complete gate now holds**: request → §6.3 pipeline → approved plan (validated,
+metric-scored, on-disk, reviewable/editable/approvable in `/plans`) → minimal scheduler
+resolves a ready task. 24 new tests green (platform 18 + coding-agent 6; full platform
+suite 235 + 1 opt-in free-model e2e, skipped without key); repo `npm run check` green.
+The real-model `/plan <request>` pipeline + complexity auto-trigger remain a tracked
+host-wiring follow-up.
+
+---
+
 ## Step 2.2 — Plan store + scope + persistence
 
 **Arch refs:** §8 (versioning), §15 (where the plan lives: session/project/user

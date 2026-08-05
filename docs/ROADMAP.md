@@ -24,7 +24,7 @@ Workers → **Memory** (features-to-implement #4)
 - [x] Step 1.10 — **Capability Platform complete** (gate: the platform is the
       default execution path for all builtin tools, not a silent fallback)
 
-## 2. Planning (features-to-implement #2) — designed
+## 2. Planning (features-to-implement #2) — complete
 
 Detailed substeps and per-step decisions live in
 `docs/planning/PLANNING_STEPS.md` (per-step design/report docs are added to
@@ -67,14 +67,14 @@ Detailed substeps and per-step decisions live in
       auto-engage via deterministic pre-filter + cheap-model AI judgment);
       end-to-end request→approved plan (full execution engine is roadmap #7)
       (`docs/planning/PLAN_SCHEDULER_E2E_DESIGN.md` / `PLAN_SCHEDULER_E2E_REPORT.md`)
-- [ ] Step 2.13 — TUI Plan View (dedicated plan review surface: plan list + drill-in
+- [x] Step 2.13 — TUI Plan View (dedicated plan review surface: plan list + drill-in
       DAG/task view; prompt-driven `user_edit` + approval in the TUI)
-      (`docs/planning/PLANNING_STEPS.md` Step 2.13)
+      (`docs/planning/PLAN_TUI_PLAN_VIEW_DESIGN.md` / `PLAN_TUI_PLAN_VIEW_REPORT.md`)
 
 ## The roadmap (build order)
 
 - [x] 1. Capability Platform (#1)
-- [ ] 2. Planning (#2) — designed (`docs/PLANNING_ARCHITECTURE.md`); substeps listed in `## 2. Planning` above; planned in `docs/planning/PLANNING_STEPS.md`
+- [x] 2. Planning (#2) — complete (`docs/PLANNING_ARCHITECTURE.md`); substeps listed in `## 2. Planning` above; planned in `docs/planning/PLANNING_STEPS.md`
 - [ ] 3. Workspaces / Git Worktrees (#3) — designed (`docs/WORKSPACE_ARCHITECTURE.md`); absorbs Step-1 leftovers **M2** (per-exec session identity), **M7** (settings write side), **M8** (session write side), **M12** (real `WorkspaceId`)
 - [ ] 4. Event System (#5) — designed (`docs/EVENT_ARCHITECTURE.md`); absorbs **M19** (event replay/history/persistence + `fs.watch`)
 - [ ] 5. Background Workers (#6)
@@ -116,7 +116,7 @@ Detailed substeps and per-step decisions live in
   driven by a per-tool spec table, and the manifests' `provides.tool` prose
   is sourced from the tool templates (a fixture pins manifest↔tool equality).
   Next: Planning (`docs/PLANNING_ARCHITECTURE.md`).
-- Current position (Planning): Steps 2.1–2.12 complete — the canonical Plan object
+- Current position (Planning): Steps 2.1–2.13 complete — the canonical Plan object
   (Goal/Assumption/Constraint/Task/PlanningPolicy/Revision/Plan/Metrics +
   status & revision-reason enums) is a validated TypeBox schema in
   `@earendil-works/pi-platform` (`/plan` subpath); a `PlanStore` (`/kernel`) owns
@@ -175,10 +175,18 @@ Detailed substeps and per-step decisions live in
   of crashing the pipeline. Now 217 unit tests green, repo check
   green, plus an opt-in free-model e2e (`test/planning-e2e-free-model.test.ts`, skipped
   without `OPENROUTER_API_KEY`) that drives the real pipeline with a free OpenRouter
-  model and checks statically that a plan was made correctly. Next: the dedicated TUI
-  plan view (Step 2.13), which re-checks the
-  Planning-complete gate with the interactive review surface in place; after that,
-  roadmap #3 (Workspaces) or a lean-slice handoff to #7.
+  model and checks statically that a plan was made correctly, and a `packages/coding-agent`
+  TUI plan view: the `/plans` extension (`PlanViewComponent` + `PlanCapabilityRunner` +
+  headless `PlanViewWidget`) rendered via `ctx.ui.custom` — the idiomatic extension path —
+  lists `<workspace>/plans`, drills into a plan's selectable task list + detail pane +
+  DAG, routes prompt-driven `user_edit` directives, and collects `a` approvals
+  (`needs_review → approved`), sourced from the platform's `./planning` subpath via the
+  root `tsconfig` path-map (no dist coupling). The **Planning-complete gate now holds**: a
+  request reaches the pipeline via `/plan` or the complexity auto-trigger, flows through
+  §6.3 into an approved plan, and the minimal scheduler resolves a ready task — while the
+  dedicated TUI plan view provides the review/approve/edit surface. Next:
+  roadmap #3 (Workspaces) or a lean-slice handoff to #7; the real-model `/plan` pipeline
+  + complexity trigger remain a tracked host-wiring follow-up.
 - Step cadence: one capability or service per step. Every step's report ends
   with a "Recommended Next Step" section that picks the next cheapest
   validation, grounded in the design docs — this is how steps 1.3–1.10 were
