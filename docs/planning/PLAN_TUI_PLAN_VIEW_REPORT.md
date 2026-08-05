@@ -80,6 +80,41 @@ Re-open the **Planning-complete gate** (2.12) with the TUI surface in place — 
 holds: request → pipeline → approved plan (validated, metric-scored, on-disk,
 reviewable, editable, approvable in the `/plans` TUI) → minimal scheduler resolves a
 ready task. Then roadmap **#3 (Workspaces)** or, if execution depth is wanted first,
-a lean-slice handoff to **#7 (Task/Execution Engine)**. The real-model `/plan` pipeline
-+ complexity trigger remain a tracked host-wiring follow-up before autonomous planning
-can create plans on demand.
+a lean-slice handoff to **#7 (Task/Execution Engine)**.
+
+## 6. Addendum — live `/plan <request>` generation (2.13.5, added 2026-02-16)
+
+**Situation fixed:** `/plan <description>` previously did nothing for the platform —
+pi fell through to its built-in "plan mode" brainstorm in chat, persisted nothing, and
+`/plans` listed zero. The 2.13 review surface was complete but nothing *generated* a
+plan from a request in the agent.
+
+**What was built** (`packages/coding-agent/src/extensions/plan/index.ts`):
+
+- `createStageCompletion(modelRuntime, model)` — a `StageCompletion` bound to the
+  agent's model: builds a pi-ai `Context{ systemPrompt, messages:[user] }` and returns
+  `contentText((await modelRuntime.completeSimple(model, context)).content)`. Kept
+  minimal; strict-JSON is handled by the platform runner (2.12 grounding + validate/
+  retry/degrade), not an API JSON mode.
+- `generatePlan({ request, store, events, modelRuntime, model })` — binds the seven AI
+  stages with a `StageModelRouting` (all → the session model, `routing.default =
+  model.id`) and runs `runPlanningPipeline`, returning the approved, persisted plan.
+- The `/plan <request>` command — TUI-gated; builds the workspace store/events;
+  guards missing model/runtime/request; notifies progress, then the approved plan id
+  ("open with /plans").
+- **Core exposure:** `modelRuntime?: ModelRuntime` on `ExtensionContext`
+  (`extensions/types.ts`), wired at the single interactive-mode construction site
+  (`interactive-mode.ts`, `this.session.modelRuntime`). It is *optional*, so no other
+  mode/test-fixture needs it; `/plan` guards when absent.
+- **Read-through:** `/plans` lists the new plan automatically.
+
+**Validation:** `test/plan-command.test.ts` — 2 tests drive `createStageCompletion` and
+`generatePlan` with a fake `modelRuntime` (per-stage canned JSON keyed by the stage
+system prompt) against a temp-dir `PlanStore`, asserting an approved plan is produced,
+persisted, and listed by the `/plans` runner. coding-agent plan/command tests: 8 green.
+
+**Deferred:** per-stage model routing from settings (`planning.models.*`) — all stages
+use the session model for now. API-side JSON modes (`json_schema` strict sampling) are
+not wired; the runner's validate/retry covers it. The complexity auto-trigger (engaging
+planning without an explicit `/plan`) remains a tracked follow-up.
+

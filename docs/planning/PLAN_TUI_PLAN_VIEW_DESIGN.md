@@ -89,3 +89,48 @@ adapter + command are coding-agent code.
   store — arrow nav, enter drill, `a` approve (re-render), `e` + typed directive +
   enter submit, escape-back twice to chat.
 - Full platform suite + repo `npm run check` green.
+
+## 6. Live `/plan <request>` (real-model generation) — added 2026-02-16
+
+**Gap found in use:** `/plan <description>` produced nothing for the platform — pi fell
+through to its built-in "plan mode" brainstorm in chat and persisted no plan, so `/plans`
+listed zero. The 2.13 review surface was complete, but there was no command to *generate*
+a plan from a request. This section plans that missing link.
+
+**Arch refs:** §6.3 (pipeline), §16 (stages as capabilities), the 2.12 orchestrator
+(`runPlanningPipeline`), the 2.13.1 `PlanCapabilityRunner`/view model, the 2.13.3
+`/plans` extension pattern.
+
+**Approach (a slash command runs our code — the same way `/plans` already does):**
+
+- **Expose the model to commands.** The AI stages need a `StageCompletion` backed by a
+  real model, but `ExtensionContext` today exposes only `model` + `modelRegistry` — not
+the runtime that can run a completion. Add `modelRuntime: ModelRuntime` to
+`ExtensionContext` and wire it at the (single) construction site in
+`packages/coding-agent/src/modes/interactive/interactive-mode.ts`
+(`this.session.modelRuntime`). This is the one narrow core edit needed.
+- **A `/plan <request>` command** in the same `extensions/plan/index.ts` as `/plans`:
+  - `createStageCompletion(modelRuntime, model)` — builds a pi-ai `Context{
+    systemPrompt, messages:[{role:"user", content:[{type:"text", text: userPrompt}]}] }`
+    and returns `contentText((await modelRuntime.completeSimple(model, context)).content)`.
+    Kept minimal: strict-JSON compliance is handled by the platform runner (2.12 schema
+    grounding + validate/retry/degrade), not by requesting API-side JSON modes.
+  - `generatePlan({ request, store, events, modelRuntime, model })` — binds the
+    completion to the seven AI stages with a `StageModelRouting` (all stages → the
+    session's model), runs `runPlanningPipeline(request, stages, ctx)`, and returns the
+    approved plan (which the pipeline persists to `<workspace>/plans`).
+  - The command guards `ctx.mode === "tui"`, builds the workspace store/events (same as
+    `/plans`), runs `generatePlan`, and `ctx.ui.notify`s the plan id + points at `/plans`.
+- **Read-through:** `/plans` lists the new plan automatically (it re-reads the store) —
+  no cross-command state.
+- **Testing:** drive `createStageCompletion` + `generatePlan` with a fake `modelRuntime`
+  whose `completeSimple` returns per-stage canned JSON (keyed by the routed model id),
+  against a temp-dir `PlanStore`; assert an approved plan is produced, persisted, and
+  listed by the runner — proving the command → pipeline → on-disk → `/plans` flow
+  headlessly. The live model path is the same code; only per-model JSON reliability
+  varies (2.12 grounding already mitigates it).
+
+**Deferred:** per-stage model routing from settings (`planning.models.*`) stays out — all
+stages use the session model for now; routing is a documented follow-up. JSON-format API
+modes (`json_schema` strict sampling) are not wired; the runner's validate/retry covers it.
+
