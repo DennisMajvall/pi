@@ -120,8 +120,9 @@ async function collectClarification(
 	questions: readonly { question: string; blocking: boolean }[],
 ): Promise<Record<string, string> | undefined> {
 	const answers: Record<string, string> = {};
-	for (const q of questions) {
-		const answer = await ctx.ui.input(q.question, "answer");
+	for (let i = 0; i < questions.length; i++) {
+		const q = questions[i]!;
+		const answer = await ctx.ui.input(`(${i + 1}/${questions.length}) ${q.question}`, "answer");
 		if (answer === undefined || answer.trim().length === 0) {
 			return undefined; // user cancelled
 		}

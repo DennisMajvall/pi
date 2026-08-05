@@ -686,3 +686,32 @@ describe("planning behavior a user would expect (§6.3 aggregate)", () => {
 		expect(trivial).toMatchObject({ engage: false });
 	});
 });
+
+describe("non-perfect plans are persisted + iterable (validation relaxation)", () => {
+	it("a coverage gap (unreachable success criterion) still yields an approved, persisted plan with a validation note", async () => {
+		const root = makeRoot();
+		const store = new PlanStore({ rootDir: root });
+		const events = await noopEvents();
+		// The decomposition only produces "deliverable-t1", so the goal's extra
+		// success criterion is unreachable — a real model might phrase criteria
+		// differently than task artifacts.
+		const completion = completionWith({
+			"goal-1": JSON.stringify({
+				summary: "Ship billing",
+				successCriteria: ["deliverable-t1", "ghost-criterion"],
+				unknowns: [],
+				requiresClarification: false,
+				clarificationQuestions: [],
+			}),
+		});
+		const result = await runPlanningPipeline("Ship billing", buildStages(completion), { store, events });
+
+		expect(result.plan.status).toBe("approved");
+		// The gap is surfaced as a low-confidence note rather than aborting the plan.
+		expect(result.plan.assumptions.some((a) => a.statement.includes("ghost-criterion"))).toBe(true);
+		// Persisted, so it can be opened in /plans, edited, and iterated on.
+		const loaded = await store.load(result.plan.id);
+		expect(loaded.status).toBe("approved");
+		expect(loaded.assumptions.some((a) => a.statement.includes("ghost-criterion"))).toBe(true);
+	});
+});

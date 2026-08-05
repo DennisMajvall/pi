@@ -37,7 +37,7 @@ import type { OptionalStageResult, PlanningStage } from "./stage.ts";
 import type { TaskDecompositionSchema } from "./task-decomposition.ts";
 import { completeTasks } from "./tasks.ts";
 import { approvePlan, autoApprovePlan, evaluateReviewGate, requestReview } from "./user-review.ts";
-import { validatePlan } from "./validation.ts";
+import { ValidationIssueCode, validatePlan } from "./validation.ts";
 
 /** The stage set the pipeline drives (all injected/bound by the host; fakes in tests). */
 export interface PlanningStages {
@@ -135,14 +135,42 @@ export async function runPlanningPipeline(
 	)) as OptionalStageResult<Plan>;
 	let plan: Plan = optimizerResult.kind === "ok" ? optimizerResult.output : draft;
 
-	// 6. Deterministic Plan Validation (a failure is a pipeline bug).
+	// 6. Deterministic Plan Validation. Structural issues (schema violation, cycle)
+	// are a hard failure — a plan must never persist invalid or cyclic. Coverage
+	// issues (unreachable success criterion, missing task purpose, duplicate
+	// deliverable) are non-fatal for real-model output: the plan persists with the
+	// issues surfaced as low-confidence notes so the user can review, edit, and
+	// iterate on it (via /plans + prompt-driven edits) instead of discarding the
+	// whole plan because a model phrased criteria differently than task artifacts.
 	const validation = validatePlan(plan);
-	if (!validation.valid) {
+	const structuralIssues = validation.issues.filter(
+		(issue) => issue.code === ValidationIssueCode.Schema || issue.code === ValidationIssueCode.Cycle,
+	);
+	if (structuralIssues.length > 0) {
 		throw new Error(
-			`planning pipeline: plan failed validation (${validation.issues
+			`planning pipeline: plan failed structural validation (${structuralIssues
 				.map((issue) => `${issue.code}: ${issue.message}`)
 				.join("; ")})`,
 		);
+	}
+	const coverageNotes = validation.issues.filter(
+		(issue) =>
+			issue.code === ValidationIssueCode.UnreachableCriterion ||
+			issue.code === ValidationIssueCode.TaskPurpose ||
+			issue.code === ValidationIssueCode.DuplicateDeliverable,
+	);
+	if (coverageNotes.length > 0) {
+		plan = {
+			...plan,
+			assumptions: [
+				...plan.assumptions,
+				...coverageNotes.map((issue) => ({
+					statement: `Validation note: ${issue.message}`,
+					confidence: 40,
+					source: "inferred" as const,
+				})),
+			],
+		};
 	}
 
 	// 7. Metrics (optional, non-mutating) → §14 Metrics on the plan.
