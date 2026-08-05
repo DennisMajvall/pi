@@ -1,6 +1,6 @@
 import Type, { type Static } from "typebox";
 
-export const PROTOCOL_VERSION = 2 as const;
+export const PROTOCOL_VERSION = 1 as const;
 
 const IdSchema = Type.String({ minLength: 1 });
 const TimestampSchema = Type.Integer({ minimum: 0 });
@@ -264,12 +264,13 @@ export const ServerSnapshotSchema = StrictObject({
 export type ServerSnapshot = Static<typeof ServerSnapshotSchema>;
 
 export const ProtocolErrorCodeSchema = Type.Union([
-	Type.Literal("auth"),
 	Type.Literal("version"),
 	Type.Literal("busy"),
 	Type.Literal("session_locked"),
 	Type.Literal("not_found"),
 	Type.Literal("invalid_request"),
+	Type.Literal("not_implemented"),
+	Type.Literal("internal_error"),
 ]);
 export const ProtocolErrorSchema = StrictObject({
 	code: ProtocolErrorCodeSchema,
@@ -381,7 +382,6 @@ export type ResultForCommand<TCommand extends Command> = TCommand["command"] ext
 export const ClientHelloSchema = StrictObject({
 	type: Type.Literal("hello"),
 	version: Type.Integer({ minimum: 0 }),
-	token: Type.String({ minLength: 1 }),
 });
 export type ClientHello = Static<typeof ClientHelloSchema>;
 

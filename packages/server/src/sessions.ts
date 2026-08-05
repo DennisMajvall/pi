@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Command, EventEnvelope, SessionSnapshot, SessionSummary } from "@earendil-works/pi-protocol";
 import type { ByteConnection, ConnectionState } from "./connection.ts";
 import { PiServerError } from "./errors.ts";
-import type { CreateSessionOptions, PiSessionBackend, PiSessionRuntime, PiSessionRuntimeEvent } from "./types.ts";
+import type { CreateSessionOptions, PiServerService, PiSessionRuntime, PiSessionRuntimeEvent } from "./types.ts";
 
 interface LiveSession {
 	id: string;
@@ -16,7 +16,7 @@ interface LiveSession {
 }
 
 interface LiveSessionManagerOptions {
-	backend: PiSessionBackend;
+	service: PiServerService;
 	isClosing: () => boolean;
 	sendMessage: (connection: ConnectionState, message: EventEnvelope) => Promise<boolean>;
 	closeConnection: (connection: ByteConnection) => Promise<void>;
@@ -62,7 +62,7 @@ export class LiveSessionManager {
 					model: command.model,
 					thinkingLevel: command.thinkingLevel,
 				};
-				const live = await this.acquire(id, () => this.options.backend.createSession(options));
+				const live = await this.acquire(id, () => this.options.service.createSession(options));
 				await this.attach(connection, live);
 				const session = this.forConnection(await this.broadcastSnapshot(live), connection);
 				this.options.broadcastServerSnapshot();
@@ -70,7 +70,7 @@ export class LiveSessionManager {
 			}
 			case "attach": {
 				const live = await this.acquire(command.sessionId, () =>
-					this.options.backend.openSession(command.sessionId),
+					this.options.service.openSession(command.sessionId),
 				);
 				await this.attach(connection, live);
 				const session = this.forConnection(await this.broadcastSnapshot(live), connection);
@@ -78,11 +78,18 @@ export class LiveSessionManager {
 				return { command: "attach" as const, session };
 			}
 			case "detach": {
-				const live = this.requireAttached(connection, command.sessionId);
-				this.detach(connection, live);
-				if (live.connections.size > 0) await this.broadcastSnapshot(live);
-				await this.maybeDispose(live);
-				this.options.broadcastServerSnapshot();
+				const live = this.liveSessions.get(command.sessionId);
+				if (connection.sessionIds.has(command.sessionId)) {
+					connection.sessionIds.delete(command.sessionId);
+					if (live) {
+						live.connections.delete(connection);
+						if (live.connections.size > 0 && !live.terminal && !live.disposing) {
+							await this.broadcastSnapshot(live);
+						}
+						await this.maybeDispose(live);
+					}
+					this.options.broadcastServerSnapshot();
+				}
 				return { command: "detach" as const, sessionId: command.sessionId };
 			}
 			case "prompt": {
@@ -130,7 +137,7 @@ export class LiveSessionManager {
 	}
 
 	async listSummaries(connection?: ConnectionState): Promise<SessionSummary[]> {
-		const stored = await this.options.backend.listSessions();
+		const stored = await this.options.service.listSessions();
 		const liveSnapshots = await Promise.all(
 			[...this.liveSessions.values()]
 				.filter((live) => !live.disposing)
@@ -218,7 +225,7 @@ export class LiveSessionManager {
 			if (snapshot.id !== id) {
 				throw new PiServerError(
 					"invalid_request",
-					`Backend returned session ${snapshot.id} for server-assigned session ${id}`,
+					`Service returned session ${snapshot.id} for server-assigned session ${id}`,
 				);
 			}
 			live = {
@@ -304,11 +311,6 @@ export class LiveSessionManager {
 		}
 		connection.sessionIds.add(live.id);
 		live.connections.add(connection);
-	}
-
-	private detach(connection: ConnectionState, live: LiveSession): void {
-		connection.sessionIds.delete(live.id);
-		live.connections.delete(connection);
 	}
 
 	private requireAttached(connection: ConnectionState, sessionId: string): LiveSession {
