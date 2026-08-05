@@ -3,9 +3,13 @@
  *
  * The interactive plan review surface as a pure, headless state machine +
  * renderer, driving the `PlanCapabilityRunner` (2.13.1): a plan list scaffolds
- * drill-in to a selected plan; within the detail view a selectable task list
- * surfaces the selected task's detail; an edit directive is collected and routed
- * through `user_edit` (via the runner); an explicit approve flips `needs_review →
+ * drill-in to a selected plan; within the detail view the whole plan is rendered
+ * as a single, word-wrapped document spanning the full terminal width — every
+ * section (goal, strategy, constraints, assumptions, tasks, DAG, revisions) is
+ * printed in full and the host terminal's scrollback is used to read it, so
+ * nothing is truncated or forced into a cramped pane. A selectable task marks
+ * the focus for edits; an edit directive is collected and routed through
+ * `user_edit` (via the runner); an explicit approve flips `needs_review →
  * approved`. Read-through guarantees freshness at every render/navigation/action,
  * with a manual refresh; no change-watching (deferred to roadmap #4).
  *
@@ -16,7 +20,7 @@
 
 import type { Plan, Task } from "../plan/index.ts";
 import type { PlanCapabilityRunner, PlanListEntry } from "./plan-capability.ts";
-import { renderPlanDag } from "./plan-view.ts";
+import { renderPlanDag, renderRevisionHistory } from "./plan-view.ts";
 
 /** A semantic action the widget handles (a key/component adapter maps keys to these). */
 export type PlanViewAction =
@@ -276,41 +280,139 @@ export class PlanViewWidget {
 		return lines;
 	}
 
+	/**
+	 * Detail view: the whole plan as one word-wrapped document spanning the full
+	 * terminal width. Every section is printed in full (goal, strategy,
+	 * constraints, assumptions, tasks, DAG, revisions) so the terminal's
+	 * scrollback can be used to read it rather than truncating long prose. The
+	 * selected task is marked with `>`; up/down moves that focus for edit.
+	 */
 	private renderDetail(width: number): string[] {
 		const plan = this.plan!;
+		const lines: string[] = [];
+		const push = (...newLines: string[]): void => {
+			lines.push(...newLines);
+		};
+
 		const version = plan.revisions.length > 0 ? plan.revisions[plan.revisions.length - 1]!.version : 1;
 		const diff = this.error ? `  error: ${this.error}` : "";
-		const head = `# Plan ${plan.id}  [${plan.status}] (v${version})${diff}`;
-		const requirement = `Requirement: ${plan.goal.summary}`;
-		const tasksLeft =
-			plan.tasks.length > 0
-				? plan.tasks.map((t, i) => {
-						const marker = i === this.selectedTaskIndex ? "> " : "  ";
-						const deps = t.dependsOn.length > 0 ? `  (after ${t.dependsOn.join(",")})` : "";
-						return `${marker}${t.id}  ${t.title}${deps}`;
-					})
-				: ["(no tasks)"];
-		const selectedTask = plan.tasks[this.selectedTaskIndex];
-		const taskRight = selectedTask
-			? [`## ${selectedTask.id}  ${selectedTask.title}`, ...renderTaskDetail(selectedTask)]
-			: ["(select a task)"];
+		push(...wrap(`# Plan ${plan.id}  [${plan.status}] (v${version})${diff}`, width));
+		push(...wrap(`Requirement: ${plan.goal.summary}`, width));
+		push(
+			...wrap(
+				`Gate: ${plan.policy.requireApproval ? "approval required" : "auto-approved"}  ·  Metrics: ${planMetrics(
+					plan,
+				)}`,
+				width,
+			),
+		);
+		push("");
 
-		const appRows = twoPane(tasksLeft, taskRight, width);
-		const dag = renderPlanDag(plan).split("\n");
+		push("## Strategy");
+		push(
+			...wrap(
+				`kind=${plan.policy.taskKind}  ·  depth=${plan.policy.planningDepth}  ·  verification=${plan.policy.verificationLevel}  ·  max ${plan.policy.maxTasks} tasks`,
+				width,
+			),
+		);
+		const strategyFlags = [
+			plan.policy.parallelExecution ? "parallel execution" : "sequential",
+			plan.policy.specialistAgents ? "specialist agents" : "generalist",
+			plan.policy.hierarchicalRefinement ? "hierarchical refinement" : "",
+			plan.policy.preferResearch ? "prefer research" : "",
+			plan.policy.dualPlanner ? "dual planner" : "",
+		].filter((flag) => flag.length > 0);
+		if (strategyFlags.length > 0) {
+			push(...wrap(strategyFlags.join("  ·  "), width));
+		}
+		push("");
+
+		if (plan.goal.successCriteria.length > 0 || plan.goal.unknowns.length > 0) {
+			push("## Goal");
+			if (plan.goal.successCriteria.length > 0) {
+				push("Success criteria:");
+				for (const criterion of plan.goal.successCriteria) {
+					push(...wrapBlock("  - ", criterion, width));
+				}
+			}
+			if (plan.goal.unknowns.length > 0) {
+				push("Unknowns:");
+				for (const unknown of plan.goal.unknowns) {
+					push(...wrapBlock("  - ", unknown, width));
+				}
+			}
+			push("");
+		}
+
+		push("## Constraints");
+		if (plan.constraints.length === 0) {
+			push("- none");
+		} else {
+			for (const constraint of plan.constraints) {
+				push(...wrapBlock(`- [${constraint.kind}] `, constraint.description, width));
+			}
+		}
+		push("");
+
+		push("## Assumptions");
+		if (plan.assumptions.length === 0) {
+			push("- none");
+		} else {
+			for (const assumption of plan.assumptions) {
+				push(
+					...wrapBlock(
+						"- ",
+						`${assumption.statement} (confidence ${assumption.confidence}, ${assumption.source})`,
+						width,
+					),
+				);
+			}
+		}
+		push("");
+
+		push(`## Tasks (${plan.tasks.length})`);
+		if (plan.tasks.length === 0) {
+			push("- (no tasks)");
+		} else {
+			for (let i = 0; i < plan.tasks.length; i++) {
+				const task = plan.tasks[i]!;
+				const marker = i === this.selectedTaskIndex ? ">" : " ";
+				const title = wrap(`${marker} ${task.id}  ${task.title}`, width);
+				push(...title.map((line, index) => (index === 0 ? line : `  ${line}`)));
+				for (const detail of renderTaskDetail(task)) {
+					push(...wrapBlock("    ", detail, width));
+				}
+				push("");
+			}
+		}
+
+		push("## DAG");
+		if (plan.tasks.length === 0) {
+			push("- none");
+		} else {
+			for (const line of renderPlanDag(plan).split("\n")) {
+				push(...wrap(line, width));
+			}
+		}
+		push("");
+
+		push("## Revisions");
+		if (plan.revisions.length === 0) {
+			push("- none");
+		} else {
+			for (const line of renderRevisionHistory(plan).split("\n")) {
+				push(...wrap(line, width));
+			}
+		}
+		push("");
+
 		const hints =
 			plan.status === "needs_review"
-				? "[up/down task · a approve · e edit · escape back]"
-				: "[up/down task · e edit · escape back]";
-		return [
-			truncate(head, width),
-			truncate(requirement, width),
-			"",
-			...appRows,
-			"",
-			...dag.map((l) => truncate(l, width)),
-			"",
-			hints,
-		];
+				? "[up/down task · a approve · e edit · escape back · r refresh]"
+				: "[up/down task · e edit · escape back · r refresh]";
+		push(hints);
+		push("(scroll the terminal to read the whole plan)");
+		return lines;
 	}
 
 	private renderEditing(width: number): string[] {
@@ -330,17 +432,57 @@ export class PlanViewWidget {
 	}
 }
 
-/** Left/right two-pane join, each row truncated to `width`. */
-function twoPane(left: string[], right: string[], width: number): string[] {
-	const half = Math.floor(width / 2);
-	const rows = Math.max(left.length, right.length);
-	const out: string[] = [];
-	for (let i = 0; i < rows; i++) {
-		const l = truncate(left[i] ?? "", half);
-		const r = truncate(right[i] ?? "", width - half - 1);
-		out.push(`${l.padEnd(half)}${r.length > 0 ? "│" : " "}${r}`);
+/** A short human-readable metrics summary, or "not scored" when absent. */
+function planMetrics(plan: Plan): string {
+	if (!plan.metrics) {
+		return "not scored";
 	}
-	return out;
+	const m = plan.metrics;
+	return `completeness ${m.completeness} · confidence ${m.confidence} · parallelism ${m.parallelism} · risk ${m.risk} · unknowns ${m.unknownCount}`;
+}
+
+/**
+ * Wrap `text` at word boundaries so every returned line is at most `width`
+ * columns. Long unbroken tokens are hard-sliced; runs of whitespace collapse to
+ * a single space. Returns a (possibly empty) array of lines.
+ */
+function wrap(text: string, width: number): string[] {
+	const words = text.split(/\s+/).filter((word) => word.length > 0);
+	if (words.length === 0) {
+		return [];
+	}
+	const effective = Math.max(1, width);
+	const lines: string[] = [];
+	let current = "";
+	for (const word of words) {
+		if (word.length >= effective) {
+			if (current.length > 0) {
+				lines.push(current);
+				current = "";
+			}
+			for (let i = 0; i < word.length; i += effective) {
+				lines.push(word.slice(i, i + effective));
+			}
+			continue;
+		}
+		const candidate = current.length === 0 ? word : `${current} ${word}`;
+		if (candidate.length > effective) {
+			lines.push(current);
+			current = word;
+		} else {
+			current = candidate;
+		}
+	}
+	if (current.length > 0) {
+		lines.push(current);
+	}
+	return lines;
+}
+
+/** Wrap `text` to fit `width` and prefix each returned line with `prefix`. */
+function wrapBlock(prefix: string, text: string, width: number): string[] {
+	const bodyWidth = Math.max(1, width - prefix.length);
+	return wrap(text, bodyWidth).map((line) => `${prefix}${line}`);
 }
 
 function truncate(text: string, width: number): string {
