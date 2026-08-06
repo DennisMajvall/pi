@@ -139,6 +139,7 @@ export {
 export {
 	type PlanViewAction,
 	type PlanViewMode,
+	type PlanViewStyle,
 	PlanViewWidget,
 	type PlanViewWidgetOptions,
 	renderTaskDetail,

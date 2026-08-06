@@ -13,9 +13,12 @@
  * approved`. Read-through guarantees freshness at every render/navigation/action,
  * with a manual refresh; no change-watching (deferred to roadmap #4).
  *
- * This module has no terminal/model dependency: it implements
- * `render(width): string[]` + semantic `handle(action)` and is driven by a thin
- * key/component adapter (the live TUI adapter is 2.13.3) or directly by tests.
+ * Color is injected via `PlanViewStyle`, a bundle of text stylers applied after
+ * word-wrapping (so ANSI never affects width measurement); the default identity
+ * style keeps the output plain. This keeps the module terminal/model-free: it
+ * implements `render(width): string[]` + semantic `handle(action)` and is driven
+ * by a thin key/component adapter (the live TUI adapter is 2.13.3) or directly
+ * by tests.
  */
 
 import type { Plan, Task } from "../plan/index.ts";
@@ -37,11 +40,53 @@ export type PlanViewAction =
 /** Which screen the widget is showing. */
 export type PlanViewMode = "list" | "detail" | "editing";
 
+/**
+ * Text stylers used to colorize plan view output. Each maps a plain string to
+ * an ANSI-colored one. The default implementation is the identity function, so
+ * the widget renders plain text unless a caller supplies themed stylers.
+ */
+export interface PlanViewStyle {
+	/** The main `# Plan …` / `# Plans …` header line. */
+	title(text: string): string;
+	/** A `## Section` heading. */
+	heading(text: string): string;
+	/** A field label such as `Purpose:`, `Requirement:`, `Depends on:`. */
+	label(text: string): string;
+	/** Plan / task identifiers. */
+	id(text: string): string;
+	/** A plan-status tag such as `[approved]`. */
+	status(text: string): string;
+	/** List bullets (`-`, `>`) and selection markers. */
+	bullet(text: string): string;
+	/** The highlighted selected-task marker. */
+	selected(text: string): string;
+	/** Muted helper text (footers, hints, "none"). */
+	dim(text: string): string;
+}
+
+const identity = (text: string): string => text;
+
+const identityStyle: PlanViewStyle = {
+	title: identity,
+	heading: identity,
+	label: identity,
+	id: identity,
+	status: identity,
+	bullet: identity,
+	selected: identity,
+	dim: identity,
+};
+
+/** Spinner frames shown while an edit directive is being applied. */
+const EDIT_SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+
 /** Options for constructing the widget. */
 export interface PlanViewWidgetOptions {
 	runner: PlanCapabilityRunner;
 	/** Called when the user backs out of the top-level plan list (returns to chat). */
 	onClose?: () => void;
+	/** Optional text stylers to colorize output. Defaults to plain text. */
+	style?: PlanViewStyle;
 }
 
 /** Render the detail lines for one task (purpose/deliverable/deps/verification). */
@@ -59,6 +104,7 @@ export function renderTaskDetail(task: Task): string[] {
 export class PlanViewWidget {
 	private readonly runner: PlanCapabilityRunner;
 	private readonly onClose?: () => void;
+	private readonly style: PlanViewStyle;
 
 	private entries: PlanListEntry[] = [];
 	private selectedIndex = 0;
@@ -67,10 +113,13 @@ export class PlanViewWidget {
 	private selectedTaskIndex = 0;
 	private editBuffer = "";
 	private error: string | undefined;
+	private editPending = false;
+	private editSpinner = 0;
 
 	constructor(options: PlanViewWidgetOptions) {
 		this.runner = options.runner;
 		this.onClose = options.onClose;
+		this.style = options.style ?? identityStyle;
 	}
 
 	/** Current screen. */
@@ -89,6 +138,18 @@ export class PlanViewWidget {
 			return this.entries[this.selectedIndex]?.id;
 		}
 		return this.plan?.id ? String(this.plan.id) : undefined;
+	}
+
+	/** True while an edit directive is being applied (model round-trip in progress). */
+	isEditPending(): boolean {
+		return this.editPending;
+	}
+
+	/** Advance the loading spinner frame; a no-op when no edit is pending. */
+	advanceEditSpinner(): void {
+		if (this.editPending) {
+			this.editSpinner = (this.editSpinner + 1) % EDIT_SPINNER_FRAMES.length;
+		}
 	}
 
 	/** Load the plan list (fresh from disk) — the widget's entry action. */
@@ -223,11 +284,15 @@ export class PlanViewWidget {
 		if (directive.length === 0 || !this.plan) {
 			return;
 		}
+		this.editPending = true;
+		this.editSpinner = 0;
 		try {
 			this.plan = await this.runner.edit(String(this.plan.id), directive);
 			this.error = undefined;
 		} catch (error) {
 			this.error = toErrorMessage(error);
+		} finally {
+			this.editPending = false;
 		}
 	}
 
@@ -240,42 +305,58 @@ export class PlanViewWidget {
 		}
 	}
 
-	/** Render the current screen as plain lines (each ≤ `width`). */
+	/** Render the current screen as plain lines (each ≤ `width` visible cols). */
 	render(width: number): string[] {
+		let lines: string[];
 		if (this.mode === "detail" && this.plan) {
-			return this.renderDetail(width);
+			lines = this.renderDetail(width);
+		} else if (this.mode === "editing" && this.plan) {
+			lines = this.renderEditing(width);
+		} else {
+			lines = this.renderList(width);
 		}
-		if (this.mode === "editing" && this.plan) {
-			return this.renderEditing(width);
+		if (this.editPending) {
+			lines.unshift(this.editStatusLine());
 		}
-		return this.renderList(width);
+		return lines;
+	}
+
+	/** A single animated status line shown while an edit is being applied. */
+	private editStatusLine(): string {
+		const frame = EDIT_SPINNER_FRAMES[this.editSpinner]!;
+		return this.style.dim(`${frame} Applying edit…`);
 	}
 
 	private renderList(width: number): string[] {
-		const lines: string[] = [`# Plans (${this.entries.length})`, ""];
+		const st = this.style;
+		const lines: string[] = [st.title(`# Plans (${this.entries.length})`), ""];
 		if (this.entries.length === 0) {
-			lines.push("No plans yet. Create one with /plan <request>.");
+			lines.push(st.dim("No plans yet. Create one with /plan <request>."));
 		} else {
 			for (let i = 0; i < this.entries.length; i++) {
 				const entry = this.entries[i]!;
 				const marker = i === this.selectedIndex ? "> " : "  ";
 				const metrics = entry.metrics ? `  ${entry.metrics}` : "";
-				lines.push(
-					truncate(
-						`${marker}${entry.id}  ${entry.title}  [${entry.status}] (v${entry.version})  ${entry.taskCount} tasks${metrics}`,
-						width,
-					),
+				let line = truncate(
+					`${marker}${entry.id}  ${entry.title}  [${entry.status}] (v${entry.version})  ${entry.taskCount} tasks${metrics}`,
+					width,
 				);
+				line = tint(line, marker, i === this.selectedIndex ? st.selected : identity);
+				line = tint(line, String(entry.id), st.id);
+				line = tint(line, `[${entry.status}]`, st.status);
+				lines.push(line);
 			}
 		}
 		if (this.error) {
-			lines.push("", `error: ${this.error}`);
+			lines.push("", st.dim(`error: ${this.error}`));
 		}
 		lines.push(
 			"",
-			this.entries.length > 0
-				? "[up/down navigate · enter open · escape quit · r refresh]"
-				: "[escape quit · r refresh]",
+			st.dim(
+				this.entries.length > 0
+					? "[up/down navigate · enter open · escape quit · r refresh]"
+					: "[escape quit · r refresh]",
+			),
 		);
 		return lines;
 	}
@@ -284,11 +365,13 @@ export class PlanViewWidget {
 	 * Detail view: the whole plan as one word-wrapped document spanning the full
 	 * terminal width. Every section is printed in full (goal, strategy,
 	 * constraints, assumptions, tasks, DAG, revisions) so the terminal's
-	 * scrollback can be used to read it rather than truncating long prose. The
-	 * selected task is marked with `>`; up/down moves that focus for edit.
+	 * scrollback can be used to read it rather than truncating long prose. Each
+	 * section heading is followed by a blank line, and the selected task is
+	 * marked with `>`; up/down moves that focus for edit.
 	 */
 	private renderDetail(width: number): string[] {
 		const plan = this.plan!;
+		const st = this.style;
 		const lines: string[] = [];
 		const push = (...newLines: string[]): void => {
 			lines.push(...newLines);
@@ -296,19 +379,30 @@ export class PlanViewWidget {
 
 		const version = plan.revisions.length > 0 ? plan.revisions[plan.revisions.length - 1]!.version : 1;
 		const diff = this.error ? `  error: ${this.error}` : "";
-		push(...wrap(`# Plan ${plan.id}  [${plan.status}] (v${version})${diff}`, width));
-		push(...wrap(`Requirement: ${plan.goal.summary}`, width));
-		push(
-			...wrap(
-				`Gate: ${plan.policy.requireApproval ? "approval required" : "auto-approved"}  ·  Metrics: ${planMetrics(
-					plan,
-				)}`,
-				width,
-			),
+
+		let header = wrap(`# Plan ${plan.id}  [${plan.status}] (v${version})${diff}`, width);
+		header = tintLine(header, "# Plan", st.title);
+		header = tintLine(header, String(plan.id), st.id);
+		header = tintLine(header, `[${plan.status}]`, st.status);
+		push(...header);
+
+		let requirement = wrap(`Requirement: ${plan.goal.summary}`, width);
+		requirement = tintLine(requirement, "Requirement:", st.label);
+		push(...requirement);
+
+		let gate = wrap(
+			`Gate: ${plan.policy.requireApproval ? "approval required" : "auto-approved"}  ·  Metrics: ${planMetrics(
+				plan,
+			)}`,
+			width,
 		);
+		gate = tintLine(gate, "Gate:", st.label);
+		gate = tintLine(gate, "Metrics:", st.label);
+		push(...gate);
 		push("");
 
-		push("## Strategy");
+		push(st.heading("## Strategy"));
+		push("");
 		push(
 			...wrap(
 				`kind=${plan.policy.taskKind}  ·  depth=${plan.policy.planningDepth}  ·  verification=${plan.policy.verificationLevel}  ·  max ${plan.policy.maxTasks} tasks`,
@@ -328,80 +422,105 @@ export class PlanViewWidget {
 		push("");
 
 		if (plan.goal.successCriteria.length > 0 || plan.goal.unknowns.length > 0) {
-			push("## Goal");
+			push(st.heading("## Goal"));
+			push("");
 			if (plan.goal.successCriteria.length > 0) {
-				push("Success criteria:");
+				push(st.label("Success criteria:"));
 				for (const criterion of plan.goal.successCriteria) {
-					push(...wrapBlock("  - ", criterion, width));
+					push(...tintLine(wrapBlock("  - ", criterion, width), "-", st.bullet));
 				}
 			}
 			if (plan.goal.unknowns.length > 0) {
-				push("Unknowns:");
+				push(st.label("Unknowns:"));
 				for (const unknown of plan.goal.unknowns) {
-					push(...wrapBlock("  - ", unknown, width));
+					push(...tintLine(wrapBlock("  - ", unknown, width), "-", st.bullet));
 				}
 			}
 			push("");
 		}
 
-		push("## Constraints");
+		push(st.heading("## Constraints"));
+		push("");
 		if (plan.constraints.length === 0) {
-			push("- none");
+			push(st.dim("- none"));
 		} else {
 			for (const constraint of plan.constraints) {
-				push(...wrapBlock(`- [${constraint.kind}] `, constraint.description, width));
+				let constraintLines = wrapBlock(`- [${constraint.kind}] `, constraint.description, width);
+				constraintLines = tintLine(constraintLines, "-", st.bullet);
+				constraintLines = tintLine(constraintLines, `[${constraint.kind}]`, st.id);
+				push(...constraintLines);
 			}
 		}
 		push("");
 
-		push("## Assumptions");
+		push(st.heading("## Assumptions"));
+		push("");
 		if (plan.assumptions.length === 0) {
-			push("- none");
+			push(st.dim("- none"));
 		} else {
 			for (const assumption of plan.assumptions) {
 				push(
-					...wrapBlock(
-						"- ",
-						`${assumption.statement} (confidence ${assumption.confidence}, ${assumption.source})`,
-						width,
+					...tintLine(
+						wrapBlock(
+							"- ",
+							`${assumption.statement} (confidence ${assumption.confidence}, ${assumption.source})`,
+							width,
+						),
+						"-",
+						st.bullet,
 					),
 				);
 			}
 		}
 		push("");
 
-		push(`## Tasks (${plan.tasks.length})`);
+		push(st.heading(`## Tasks (${plan.tasks.length})`));
+		push("");
 		if (plan.tasks.length === 0) {
-			push("- (no tasks)");
+			push(st.dim("- (no tasks)"));
 		} else {
 			for (let i = 0; i < plan.tasks.length; i++) {
 				const task = plan.tasks[i]!;
-				const marker = i === this.selectedTaskIndex ? ">" : " ";
-				const title = wrap(`${marker} ${task.id}  ${task.title}`, width);
-				push(...title.map((line, index) => (index === 0 ? line : `  ${line}`)));
+				const isSelected = i === this.selectedTaskIndex;
+				const marker = isSelected ? "> " : "  ";
+				let titleLines = wrap(`${marker}${task.id}  ${task.title}`, width);
+				titleLines = titleLines.map((line, index) => (index === 0 ? line : `  ${line}`));
+				titleLines = tintLine(titleLines, marker, isSelected ? st.selected : identity);
+				titleLines = tintLine(titleLines, String(task.id), st.id);
+				push(...titleLines);
 				for (const detail of renderTaskDetail(task)) {
-					push(...wrapBlock("    ", detail, width));
+					const { label, body } = splitLabel(detail);
+					push(
+						...tintLine(wrapBlock("    ", body.length > 0 ? `${label} ${body}` : label, width), label, st.label),
+					);
 				}
 				push("");
 			}
 		}
 
-		push("## DAG");
+		push(st.heading("## DAG"));
+		push("");
 		if (plan.tasks.length === 0) {
-			push("- none");
+			push(st.dim("- none"));
 		} else {
-			for (const line of renderPlanDag(plan).split("\n")) {
-				push(...wrap(line, width));
+			const dagLines = renderPlanDag(plan).split("\n");
+			for (let i = 0; i < dagLines.length; i++) {
+				let dagLine = wrap(dagLines[i]!, width);
+				if (i === 0) {
+					dagLine = tintLine(dagLine, "DAG:", st.label);
+				}
+				push(...dagLine);
 			}
 		}
 		push("");
 
-		push("## Revisions");
+		push(st.heading("## Revisions"));
+		push("");
 		if (plan.revisions.length === 0) {
-			push("- none");
+			push(st.dim("- none"));
 		} else {
-			for (const line of renderRevisionHistory(plan).split("\n")) {
-				push(...wrap(line, width));
+			for (const revision of renderRevisionHistory(plan).split("\n")) {
+				push(...wrap(revision, width));
 			}
 		}
 		push("");
@@ -410,24 +529,26 @@ export class PlanViewWidget {
 			plan.status === "needs_review"
 				? "[up/down task · a approve · e edit · escape back · r refresh]"
 				: "[up/down task · e edit · escape back · r refresh]";
-		push(hints);
-		push("(scroll the terminal to read the whole plan)");
+		push(st.dim(hints));
+		push(st.dim("(scroll the terminal to read the whole plan)"));
 		return lines;
 	}
 
 	private renderEditing(width: number): string[] {
 		const plan = this.plan!;
+		const st = this.style;
 		const version = plan.revisions.length > 0 ? plan.revisions[plan.revisions.length - 1]!.version : 1;
-		const head = `# Plan ${plan.id}  [${plan.status}] (v${version})`;
-		const prompt = `edit > ${this.editBuffer}${this.editBuffer.length > 0 ? "" : " "}`;
-		const hint = "[type a directive like 'merge t2 and t3' · enter apply · escape cancel]";
+		const head = st.title(truncate(`# Plan ${plan.id}  [${plan.status}] (v${version})`, width));
+		const promptSource = `edit > ${this.editBuffer}${this.editBuffer.length > 0 ? "" : " "}`;
+		const prompt = tint(truncate(promptSource, width), "edit >", st.label);
+		const hint = st.dim("[type a directive like 'merge t2 and t3' · enter apply · escape cancel]");
 		return [
-			truncate(head, width),
-			truncate(plan.goal.summary, width),
+			head,
+			...wrap(plan.goal.summary, width),
 			"",
-			truncate(prompt, width),
+			prompt,
 			"",
-			this.error ? truncate(`error: ${this.error}`, width) : hint,
+			this.error ? st.dim(`error: ${this.error}`) : hint,
 		];
 	}
 }
@@ -441,10 +562,19 @@ function planMetrics(plan: Plan): string {
 	return `completeness ${m.completeness} · confidence ${m.confidence} · parallelism ${m.parallelism} · risk ${m.risk} · unknowns ${m.unknownCount}`;
 }
 
+/** Split a `Label: body` line into its label (including trailing colon) and body. */
+function splitLabel(line: string): { label: string; body: string } {
+	const index = line.indexOf(": ");
+	if (index === -1) {
+		return { label: line, body: "" };
+	}
+	return { label: line.slice(0, index + 1), body: line.slice(index + 2) };
+}
+
 /**
  * Wrap `text` at word boundaries so every returned line is at most `width`
- * columns. Long unbroken tokens are hard-sliced; runs of whitespace collapse to
- * a single space. Returns a (possibly empty) array of lines.
+ * visible columns. Long unbroken tokens are hard-sliced; runs of whitespace
+ * collapse to a single space. Input must be free of ANSI escape sequences.
  */
 function wrap(text: string, width: number): string[] {
 	const words = text.split(/\s+/).filter((word) => word.length > 0);
@@ -479,10 +609,41 @@ function wrap(text: string, width: number): string[] {
 	return lines;
 }
 
-/** Wrap `text` to fit `width` and prefix each returned line with `prefix`. */
+/**
+ * Wrap `text` to fit `width` and prefix the first line with `prefix`. Wrapped
+ * continuation lines are indented to the same column as the first line (spaced
+ * out to `prefix` width) instead of repeating the prefix, so a bulleted list or
+ * labelled field never re-emits its bullet/label on every wrapped line.
+ */
 function wrapBlock(prefix: string, text: string, width: number): string[] {
 	const bodyWidth = Math.max(1, width - prefix.length);
-	return wrap(text, bodyWidth).map((line) => `${prefix}${line}`);
+	const wrapped = wrap(text, bodyWidth);
+	if (wrapped.length === 0) {
+		return [];
+	}
+	const continuation = " ".repeat(prefix.length);
+	return wrapped.map((line, index) => (index === 0 ? `${prefix}${line}` : `${continuation}${line}`));
+}
+
+/**
+ * Replace the first occurrence of `token` in a single string with its styled
+ * form, leaving the rest unchanged. No-op if the token is absent.
+ */
+function tint(text: string, token: string, colour: (text: string) => string): string {
+	const index = text.indexOf(token);
+	if (index === -1) {
+		return text;
+	}
+	return `${text.slice(0, index)}${colour(token)}${text.slice(index + token.length)}`;
+}
+
+/** Apply `tint` to the first line of `lines`. */
+function tintLine(lines: string[], token: string, colour: (text: string) => string): string[] {
+	if (lines.length === 0) {
+		return lines;
+	}
+	lines[0] = tint(lines[0]!, token, colour);
+	return lines;
 }
 
 function truncate(text: string, width: number): string {

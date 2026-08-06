@@ -12,7 +12,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { capabilityId, planId, taskId } from "../src/identifier/index.ts";
 import { PlanStore } from "../src/kernel/plan-store.ts";
 import type { Plan, Task } from "../src/plan/index.ts";
-import { createPlanCapabilityRunner, PlanViewWidget } from "../src/planning/index.ts";
+import { createPlanCapabilityRunner, type PlanCapabilityRunner, PlanViewWidget } from "../src/planning/index.ts";
 import type { EventBusService } from "../src/service/index.ts";
 
 const tempDirs: string[] = [];
@@ -221,6 +221,38 @@ describe("approve + edit via the widget (2.13.2)", () => {
 		// plan is unchanged: the cycle-inducing move was rejected, not applied.
 		expect(widget.render(80).join("\n")).toMatch(/error:/i);
 		expect(widget.currentPlan?.tasks.find((t) => String(t.id) === "t1")?.dependsOn).toEqual([]);
+	});
+});
+
+describe("pending-edit status", () => {
+	it("shows a status line while an edit directive is being applied", async () => {
+		const root = makeRoot();
+		const store = new PlanStore({ rootDir: root });
+		await store.save(samplePlan("a"));
+		const base = createPlanCapabilityRunner({ store, events: fakeEvents() });
+		let resolveEdit!: (plan: Plan) => void;
+		const deferred = new Promise<Plan>((resolve) => {
+			resolveEdit = resolve;
+		});
+		const runner: PlanCapabilityRunner = {
+			...base,
+			edit: async () => deferred,
+		};
+		const widget = new PlanViewWidget({ runner });
+		await widget.initialize();
+		await widget.handle({ type: "enter" }); // open the plan into detail
+		await widget.handle({ type: "edit" });
+		for (const ch of "add a constraint on local storage") {
+			await widget.handle({ type: "char", char: ch });
+		}
+		// Submit the directive without awaiting so the edit is still in flight.
+		const submitting = widget.handle({ type: "enter" });
+		expect(widget.isEditPending()).toBe(true);
+		expect(widget.render(80).join("\n")).toContain("Applying edit");
+		resolveEdit({ ...samplePlan("a") });
+		await submitting;
+		expect(widget.isEditPending()).toBe(false);
+		expect(widget.render(80).join("\n")).not.toContain("Applying edit");
 	});
 });
 

@@ -14,10 +14,11 @@
  */
 
 import { type Context, contentText, type Model } from "@earendil-works/pi-ai";
-import { capabilityId } from "@earendil-works/pi-platform/identifier";
+import { capabilityId, taskId } from "@earendil-works/pi-platform/identifier";
 import { PlanStore } from "@earendil-works/pi-platform/kernel";
 import type { Plan } from "@earendil-works/pi-platform/plan";
 import {
+	appendPlanRevision,
 	ClarificationRequiredError,
 	constraintExtractionStage,
 	createPlanCapabilityRunner,
@@ -27,17 +28,61 @@ import {
 	metricsStage,
 	optimizerStage,
 	type PlanCapabilityRunner,
+	type PlanEdit,
+	type PlanViewStyle,
 	PlanViewWidget,
+	parsePlanEdit,
 	runPlanningPipeline,
+	runStrictJsonStage,
 	type StageCompletion,
 	type StageModelRouting,
 	taskDecompositionStage,
+	ValidationIssueCode,
+	validatePlan,
 } from "@earendil-works/pi-platform/planning";
+import { PlanSchema } from "@earendil-works/pi-platform/schema";
 import type { EventBusService } from "@earendil-works/pi-platform/service";
 import type { ExtensionAPI, ExtensionCommandContext } from "../../core/extensions/types.ts";
 import type { ModelRuntime } from "../../core/model-runtime.ts";
+import type { Theme } from "../../modes/interactive/theme/theme.ts";
 import { getPlatformRuntime } from "../../platform/platform-runtime.ts";
 import { PlanViewComponent } from "./plan-view-component.ts";
+
+/** Map a theme color name for a plan lifecycle status. */
+function statusColor(status: string): "success" | "warning" | "accent" | "error" | "muted" | "dim" {
+	switch (status) {
+		case "approved":
+			return "success";
+		case "completed":
+			return "success";
+		case "needs_review":
+			return "warning";
+		case "replanning":
+			return "warning";
+		case "running":
+			return "accent";
+		case "failed":
+			return "error";
+		case "archived":
+			return "dim";
+		default:
+			return "muted";
+	}
+}
+
+/** Build the plan view text stylers from the active TUI theme. */
+function themeToPlanStyle(theme: Theme): PlanViewStyle {
+	return {
+		title: (text) => theme.fg("accent", theme.bold(text)),
+		heading: (text) => theme.fg("mdHeading", theme.bold(text)),
+		label: (text) => theme.fg("toolTitle", text),
+		id: (text) => theme.fg("accent", text),
+		status: (text) => theme.fg(statusColor(text.slice(1, -1)), text),
+		bullet: (text) => theme.fg("mdListBullet", text),
+		selected: (text) => theme.fg("warning", theme.bold(text)),
+		dim: (text) => theme.fg("dim", text),
+	};
+}
 
 const READ_CAPABILITY_ID = capabilityId("tool.read");
 
@@ -114,6 +159,129 @@ export async function generatePlan(options: GeneratePlanOptions): Promise<Plan> 
 	return result.plan;
 }
 
+/** True when the deterministic directive parser did not recognize a directive. */
+function isUnsupportedDirectiveError(error: unknown): boolean {
+	return error instanceof Error && error.message.includes("unsupported directive");
+}
+
+/** Task ids whose content differs between an original and an edited plan (for the revision). */
+function changedTaskIdsBetween(original: Plan, edited: Plan): string[] {
+	const byId = new Map(original.tasks.map((t) => [String(t.id), t]));
+	const changed = new Set<string>();
+	for (const t of edited.tasks) {
+		const orig = byId.get(String(t.id));
+		if (!orig || JSON.stringify(orig) !== JSON.stringify(t)) {
+			changed.add(String(t.id));
+		}
+	}
+	for (const t of original.tasks) {
+		if (!edited.tasks.some((e) => String(e.id) === String(t.id))) {
+			changed.add(String(t.id));
+		}
+	}
+	return [...changed];
+}
+
+/** Options for the AI-driven plan edit fallback. */
+export interface AiEditPlanOptions {
+	plan: Plan;
+	directive: string;
+	store: PlanStore;
+	modelRuntime: ModelRuntime;
+	model: Model<any>;
+}
+
+/**
+ * Apply a free-form conversational edit directive via the model and persist the
+ * result, recording a `user_edit` revision. The model returns the full edited
+ * plan as strict JSON, validated against `PlanSchema` and the DAG invariants
+ * before saving.
+ */
+export async function aiEditPlan(options: AiEditPlanOptions): Promise<Plan> {
+	const completion = createStageCompletion(options.modelRuntime, options.model);
+	const systemPrompt =
+		"You are Pi's plan editor. Apply the user's requested change to the existing plan " +
+		"and return the FULL edited plan as valid JSON matching the Plan schema exactly. " +
+		"Keep every field the change does not affect identical to the input plan, and " +
+		"preserve the dependency DAG (dependsOn must reference existing task ids, no cycles).";
+	const result = await runStrictJsonStage({
+		completion,
+		systemPrompt,
+		userPrompt: [
+			"<directive>",
+			options.directive,
+			"</directive>",
+			"",
+			"<current_plan>",
+			JSON.stringify(options.plan),
+			"</current_plan>",
+		].join("\n"),
+		outputSchema: PlanSchema,
+		model: options.model.id,
+		mandatory: true,
+		stageName: "plan edit",
+	});
+	if (result.kind !== "ok") {
+		throw new Error(result.error ?? "plan edit failed");
+	}
+	const edited = result.output as unknown as Plan;
+	// Hard-fail only on schema/cycle/dangling-ref issues; coverage issues
+	// (unreachable criterion, missing purpose, duplicate deliverable) are
+	// non-fatal and persist — matching the planning pipeline's behavior.
+	const validation = validatePlan(edited);
+	const hardIssues = validation.issues.filter(
+		(issue) => issue.code === ValidationIssueCode.Schema || issue.code === ValidationIssueCode.Cycle,
+	);
+	const taskIds = new Set(edited.tasks.map((t) => String(t.id)));
+	for (const task of edited.tasks) {
+		for (const dep of task.dependsOn) {
+			if (!taskIds.has(String(dep))) {
+				hardIssues.push({
+					code: ValidationIssueCode.Schema,
+					message: `task ${task.id} depends on missing task ${dep}`,
+				});
+			}
+		}
+	}
+	if (hardIssues.length > 0) {
+		throw new Error(
+			`plan edit produced an invalid plan: ${hardIssues.map((i) => i.message).join("; ") || "unknown issue"}`,
+		);
+	}
+	const changed = changedTaskIdsBetween(options.plan, edited).map((id) => taskId(id));
+	const withRevision = appendPlanRevision(edited, "user_edit", changed);
+	await options.store.save(withRevision);
+	return withRevision;
+}
+
+/**
+ * Wrap a deterministic runner so `edit` falls back to the model when the
+ * deterministic directive parser does not recognize the instruction.
+ */
+function withAiEditFallback(
+	runner: PlanCapabilityRunner,
+	options: Omit<AiEditPlanOptions, "plan" | "directive">,
+): PlanCapabilityRunner {
+	return {
+		...runner,
+		async edit(planId: string, edit: PlanEdit | string): Promise<Plan> {
+			if (typeof edit !== "string") {
+				return runner.edit(planId, edit);
+			}
+			const plan = await runner.load(planId);
+			try {
+				const parsed = parsePlanEdit(edit, plan);
+				return runner.edit(planId, parsed);
+			} catch (error) {
+				if (!isUnsupportedDirectiveError(error)) {
+					throw error;
+				}
+			}
+			return aiEditPlan({ ...options, plan, directive: edit });
+		},
+	};
+}
+
 /** Collect answers to a goal's blocking clarification questions (TUI input dialogs). */
 async function collectClarification(
 	ctx: ExtensionCommandContext,
@@ -144,8 +312,26 @@ export default function planViewExtension(pi: ExtensionAPI): void {
 				ctx.ui.notify("Platform runtime is not available", "warning");
 				return;
 			}
-			await ctx.ui.custom<void>((tui, _theme, _keybindings, done) => {
-				const widget = new PlanViewWidget({ runner, onClose: () => done() });
+			const deps = workspacePlanDeps();
+			const model = ctx.model;
+			const modelRuntime = ctx.modelRuntime;
+			// When a model is available, fall back to it for directives the
+			// deterministic parser does not recognize. Otherwise edits stay
+			// deterministic.
+			const editRunner =
+				deps && modelRuntime && model
+					? withAiEditFallback(runner, {
+							store: deps.store,
+							modelRuntime,
+							model,
+						})
+					: runner;
+			await ctx.ui.custom<void>((tui, theme, _keybindings, done) => {
+				const widget = new PlanViewWidget({
+					runner: editRunner,
+					onClose: () => done(),
+					style: themeToPlanStyle(theme),
+				});
 				return widget.initialize().then(() => new PlanViewComponent(widget, tui));
 			});
 		},

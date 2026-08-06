@@ -20,6 +20,7 @@ import { type Component, Key, matchesKey, type TUI } from "@earendil-works/pi-tu
 export class PlanViewComponent implements Component {
 	private readonly widget: PlanViewWidget;
 	private readonly tui: TUI;
+	private editTimer: ReturnType<typeof setInterval> | undefined;
 
 	constructor(widget: PlanViewWidget, tui: TUI) {
 		this.widget = widget;
@@ -36,11 +37,34 @@ export class PlanViewComponent implements Component {
 		if (!action) {
 			return;
 		}
-		void this.widget.handle(action).then(() => this.tui.requestRender());
+		// Enter in editing mode submits the directive, which may hit the model and
+		// take a moment. Start the spinner so the pending edit is visible.
+		if (action.type === "enter" && this.widget.currentMode === "editing") {
+			this.startEditSpinner();
+		}
+		void this.widget.handle(action).then(() => {
+			this.stopEditSpinner();
+			this.tui.requestRender();
+		});
 	}
 
 	invalidate(): void {
 		// Nothing cached: the widget recomputes its render on every call.
+	}
+
+	private startEditSpinner(): void {
+		this.stopEditSpinner();
+		this.editTimer = setInterval(() => {
+			this.widget.advanceEditSpinner();
+			this.tui.requestRender();
+		}, 120);
+	}
+
+	private stopEditSpinner(): void {
+		if (this.editTimer) {
+			clearInterval(this.editTimer);
+			this.editTimer = undefined;
+		}
 	}
 }
 
