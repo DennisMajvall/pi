@@ -33,6 +33,7 @@ export type PlanViewAction =
 	| { type: "escape" }
 	| { type: "approve" }
 	| { type: "edit" }
+	| { type: "execute" }
 	| { type: "char"; char: string }
 	| { type: "backspace" }
 	| { type: "refresh" };
@@ -85,6 +86,8 @@ export interface PlanViewWidgetOptions {
 	runner: PlanCapabilityRunner;
 	/** Called when the user backs out of the top-level plan list (returns to chat). */
 	onClose?: () => void;
+	/** Called with the selected plan when the user requests to execute it. */
+	onExecute?: (plan: Plan) => void;
 	/** Optional text stylers to colorize output. Defaults to plain text. */
 	style?: PlanViewStyle;
 }
@@ -104,6 +107,7 @@ export function renderTaskDetail(task: Task): string[] {
 export class PlanViewWidget {
 	private readonly runner: PlanCapabilityRunner;
 	private readonly onClose?: () => void;
+	private readonly onExecute?: (plan: Plan) => void;
 	private readonly style: PlanViewStyle;
 
 	private entries: PlanListEntry[] = [];
@@ -119,6 +123,7 @@ export class PlanViewWidget {
 	constructor(options: PlanViewWidgetOptions) {
 		this.runner = options.runner;
 		this.onClose = options.onClose;
+		this.onExecute = options.onExecute;
 		this.style = options.style ?? identityStyle;
 	}
 
@@ -190,6 +195,9 @@ export class PlanViewWidget {
 				break;
 			case "edit":
 				this.beginEdit();
+				break;
+			case "execute":
+				await this.execute();
 				break;
 			case "char":
 				if (this.mode === "editing") {
@@ -277,6 +285,32 @@ export class PlanViewWidget {
 		this.error = undefined;
 	}
 
+	/**
+	 * Hand the currently selected (list) / open (detail) plan to `onExecute`.
+	 * The host decides how to run it (typically by closing the view and
+	 * dispatching an execution prompt to the agent).
+	 */
+	private async execute(): Promise<void> {
+		let plan: Plan | undefined;
+		if (this.mode === "detail" && this.plan) {
+			plan = this.plan;
+		} else if (this.mode === "list") {
+			const id = this.selectedPlanId();
+			if (id === undefined) {
+				return;
+			}
+			try {
+				plan = await this.runner.load(id);
+			} catch (error) {
+				this.error = toErrorMessage(error);
+				return;
+			}
+		}
+		if (plan) {
+			this.onExecute?.(plan);
+		}
+	}
+
 	private async submitEdit(): Promise<void> {
 		const directive = this.editBuffer.trim();
 		this.mode = "detail";
@@ -354,7 +388,7 @@ export class PlanViewWidget {
 			"",
 			st.dim(
 				this.entries.length > 0
-					? "[up/down navigate · enter open · escape quit · r refresh]"
+					? "[up/down navigate · enter open · g run · escape quit · r refresh]"
 					: "[escape quit · r refresh]",
 			),
 		);
@@ -527,8 +561,8 @@ export class PlanViewWidget {
 
 		const hints =
 			plan.status === "needs_review"
-				? "[up/down task · a approve · e edit · escape back · r refresh]"
-				: "[up/down task · e edit · escape back · r refresh]";
+				? "[up/down task · a approve · e edit · g run · escape back · r refresh]"
+				: "[up/down task · e edit · g run · escape back · r refresh]";
 		push(st.dim(hints));
 		push(st.dim("(scroll the terminal to read the whole plan)"));
 		return lines;

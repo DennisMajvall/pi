@@ -81,6 +81,7 @@ function keyToAction(data: string, mode: PlanViewMode): PlanViewAction | undefin
 	}
 	if (matchesKey(data, "a")) return { type: "approve" };
 	if (matchesKey(data, "e")) return { type: "edit" };
+	if (matchesKey(data, "g")) return { type: "execute" };
 	if (matchesKey(data, "r")) return { type: "refresh" };
 	return undefined;
 }

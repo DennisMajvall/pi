@@ -282,6 +282,36 @@ function withAiEditFallback(
 	};
 }
 
+/**
+ * Build a prompt that instructs the agent to execute a plan in the normal chat
+ * view, working through its tasks with the usual tools and showing progress.
+ */
+function buildExecutePrompt(plan: Plan): string {
+	const version = plan.revisions.length > 0 ? plan.revisions[plan.revisions.length - 1]!.version : 1;
+	const taskLines = plan.tasks.map((t) =>
+		[
+			`## ${t.id}: ${t.title}`,
+			`Purpose: ${t.purpose}`,
+			`Deliverable: ${t.deliverable}`,
+			`Depends on: ${t.dependsOn.length > 0 ? t.dependsOn.join(", ") : "(none)"}`,
+			`Verification: ${t.verification.trim().length > 0 ? t.verification : "(none)"}`,
+		].join("\n"),
+	);
+	return [
+		`Please execute the plan "${plan.goal.summary}" (id ${plan.id}, v${version}, status ${plan.status}).`,
+		"",
+		`Requirement: ${plan.goal.summary}`,
+		"",
+		"Tasks (work through them, respecting dependencies):",
+		"",
+		...taskLines,
+		"",
+		"For each task, carry it out with the appropriate tools, verify it against its Verification/",
+		"Deliverable before moving on, and give a short summary when each task is done and when the",
+		"whole plan is complete.",
+	].join("\n");
+}
+
 /** Collect answers to a goal's blocking clarification questions (TUI input dialogs). */
 async function collectClarification(
 	ctx: ExtensionCommandContext,
@@ -330,6 +360,17 @@ export default function planViewExtension(pi: ExtensionAPI): void {
 				const widget = new PlanViewWidget({
 					runner: editRunner,
 					onClose: () => done(),
+					onExecute: (plan) => {
+						// Hand off to the normal chat view so the agent runs the plan
+						// with the usual thought process, tools, and interactivity.
+						done();
+						if (ctx.isIdle()) {
+							pi.sendUserMessage(buildExecutePrompt(plan));
+						} else {
+							ctx.ui.notify("Agent is busy; queued to run after the current turn.", "info");
+							pi.sendUserMessage(buildExecutePrompt(plan), { deliverAs: "followUp" });
+						}
+					},
 					style: themeToPlanStyle(theme),
 				});
 				return widget.initialize().then(() => new PlanViewComponent(widget, tui));

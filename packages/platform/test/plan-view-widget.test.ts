@@ -224,6 +224,35 @@ describe("approve + edit via the widget (2.13.2)", () => {
 	});
 });
 
+describe("execute (run)", () => {
+	it("hands the open plan to onExecute from the detail view", async () => {
+		const root = makeRoot();
+		const store = new PlanStore({ rootDir: root });
+		await store.save(samplePlan("a"));
+		const runner = createPlanCapabilityRunner({ store, events: fakeEvents() });
+		const executed: Plan[] = [];
+		const widget = new PlanViewWidget({ runner, onExecute: (plan) => executed.push(plan) });
+		await widget.initialize();
+		await widget.handle({ type: "enter" }); // open into detail
+		await widget.handle({ type: "execute" });
+		expect(executed).toHaveLength(1);
+		expect(String(executed[0]!.id)).toBe("a");
+	});
+
+	it("loads the selected list entry and hands it to onExecute from the list view", async () => {
+		const root = makeRoot();
+		const store = new PlanStore({ rootDir: root });
+		await store.save(samplePlan("b"));
+		const runner = createPlanCapabilityRunner({ store, events: fakeEvents() });
+		const executed: Plan[] = [];
+		const widget = new PlanViewWidget({ runner, onExecute: (plan) => executed.push(plan) });
+		await widget.initialize();
+		await widget.handle({ type: "execute" });
+		expect(executed).toHaveLength(1);
+		expect(String(executed[0]!.id)).toBe("b");
+	});
+});
+
 describe("pending-edit status", () => {
 	it("shows a status line while an edit directive is being applied", async () => {
 		const root = makeRoot();

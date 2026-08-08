@@ -72,6 +72,7 @@
 
 ### Added
 
+- Added a `g` (run) shortcut to the `/plans` view that closes the view and executes the selected plan as a normal prompt in the chat view, running each task with the agent's usual tools and thought process.
 - Added built-in Baseten provider support with `BASETEN_API_KEY` authentication and `zai-org/GLM-5.2` as the default model.
 - Added `CredentialSynchronizationError` for credential changes that commit successfully but fail to synchronize local model state.
 - Added chainable `pi.registerMarkdownTransformer()` hooks for display-only transformation of user and assistant Markdown.
