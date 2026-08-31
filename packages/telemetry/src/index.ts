@@ -21,24 +21,7 @@ export interface TelemetrySpan extends TelemetryContext {
 	setStatus(status: SpanStatus): void;
 }
 
-function startNoopSpan<T>(_options: SpanOptions, callback: (span: TelemetrySpan) => T | Promise<T>): Promise<T> {
-	try {
-		return Promise.resolve(callback(noopTelemetrySpan));
-	} catch (error) {
-		return Promise.reject(error);
-	}
-}
-
-const noopTelemetrySpan: TelemetrySpan = {
-	startSpan: startNoopSpan,
-	addEvent: () => {},
-	setAttributes: () => {},
-	setStatus: () => {},
-};
-Object.freeze(noopTelemetrySpan);
-
-/** Shared telemetry context used when an application does not provide one. */
-export const NOOP_TELEMETRY_CONTEXT: TelemetryContext = noopTelemetrySpan;
+export { NOOP_TELEMETRY_CONTEXT } from "./noop.ts";
 
 export type TelemetryAttributeType = "string" | "number" | "boolean" | "string[]" | "number[]" | "boolean[]";
 
@@ -269,107 +252,106 @@ export type TelemetrySchemaSpanUnion<Schema extends TelemetrySchemaDefinition> =
 	};
 }[TelemetrySchemaSpanName<Schema>];
 
-export const AI_TELEMETRY_SCHEMA = defineTelemetrySchema({
-	version: 1,
-	spans: {
-		"pi.ai.request": {
-			description: "One logical request to an AI provider",
-			parents: { kind: "any" },
-			startAttributes: {
-				"pi.ai.operation": {
-					type: "string",
-					required: true,
-					values: ["stream", "fetch_deferred", "cancel_deferred", "generate_images"],
-					description: "Logical provider operation",
-				},
-				"pi.ai.provider": {
-					type: "string",
-					required: true,
-					description: "Selected provider id",
-				},
-				"pi.ai.model": {
-					type: "string",
-					required: true,
-					description: "Requested model id",
-				},
-				"pi.ai.api": {
-					type: "string",
-					required: true,
-					description: "Provider API id",
-				},
-				"pi.ai.streaming": {
-					type: "boolean",
-					required: true,
-					description: "Whether this operation returns a stream",
-				},
-				"pi.ai.deferred": {
-					type: "boolean",
-					required: false,
-					description: "Whether the operation requests or participates in deferred execution",
-				},
-			},
-			endAttributes: {
-				"pi.ai.response.model": { type: "string", description: "Concrete response model" },
-				"pi.ai.response.id": {
-					type: "string",
-					cardinality: "high",
-					description: "Provider response id",
-				},
-				"pi.ai.response.stop_reason": {
-					type: "string",
-					values: ["stop", "length", "tool_use", "error", "aborted", "deferred"],
-					description: "Normalized terminal response reason",
-				},
-				"pi.ai.http.status_code": { type: "number", description: "Final HTTP status" },
-				"pi.ai.usage.input_tokens": { type: "number", description: "Reported input tokens" },
-				"pi.ai.usage.output_tokens": { type: "number", description: "Reported output tokens" },
-				"pi.ai.usage.cache_read_tokens": { type: "number", description: "Reported cache-read tokens" },
-				"pi.ai.usage.cache_write_tokens": {
-					type: "number",
-					description: "Reported cache-write tokens",
-				},
-				"pi.ai.usage.reasoning_tokens": { type: "number", description: "Reported reasoning tokens" },
-				"pi.ai.usage.total_tokens": { type: "number", description: "Reported total tokens" },
-				"pi.ai.usage.cost": { type: "number", description: "Reported total cost" },
-				"pi.ai.stream.chunk_count": { type: "number", description: "Streamed update chunk count" },
-				"pi.ai.stream.time_to_first_chunk_ms": {
-					type: "number",
-					description: "Elapsed milliseconds to first update chunk",
-				},
-				"pi.ai.error.type": {
-					type: "string",
-					cardinality: "low",
-					description: "Provider or transport error class",
-				},
-			},
-			status: { default: "ok", errorWhen: "The operation throws or returns an error result" },
-		},
-	},
-} as const);
+type TelemetrySchemaTuple = readonly [TelemetrySchemaDefinition, ...TelemetrySchemaDefinition[]];
 
-export type AiSpanName = TelemetrySchemaSpanName<typeof AI_TELEMETRY_SCHEMA>;
-export type AiSpanStartAttributes<Name extends AiSpanName> = TelemetrySchemaSpanStartAttributes<
-	typeof AI_TELEMETRY_SCHEMA,
-	Name
->;
-export type AiSpanEndAttributes<Name extends AiSpanName> = TelemetrySchemaSpanEndAttributes<
-	typeof AI_TELEMETRY_SCHEMA,
-	Name
->;
-export type AiSpanAttributes<Name extends AiSpanName> = AiSpanStartAttributes<Name> & AiSpanEndAttributes<Name>;
-export type AiSpanEventName<Name extends AiSpanName> = TelemetrySchemaSpanEventName<typeof AI_TELEMETRY_SCHEMA, Name>;
-export type AiSpanEventAttributes<
-	Name extends AiSpanName,
-	EventName extends AiSpanEventName<Name>,
-> = TelemetrySchemaSpanEventAttributes<typeof AI_TELEMETRY_SCHEMA, Name, EventName>;
-export type AiTelemetrySpan<Name extends AiSpanName> = SchemaTelemetrySpan<typeof AI_TELEMETRY_SCHEMA, Name>;
-export type AiSpan = TelemetrySchemaSpanUnion<typeof AI_TELEMETRY_SCHEMA>;
+type SpanNameInSchema<Schema extends TelemetrySchemaDefinition> = Schema extends TelemetrySchemaDefinition
+	? TelemetrySchemaSpanName<Schema>
+	: never;
 
-export function startAiSpan<Name extends AiSpanName, const Attributes extends AiSpanStartAttributes<Name>, Result>(
-	telemetryContext: TelemetryContext,
+type SpanNameInSchemas<Schemas extends TelemetrySchemaTuple> = SpanNameInSchema<Schemas[number]>;
+
+type SpanStartAttributesInSchema<
+	Schema extends TelemetrySchemaDefinition,
+	Name extends string,
+> = Schema extends TelemetrySchemaDefinition
+	? Name extends TelemetrySchemaSpanName<Schema>
+		? TelemetrySchemaSpanStartAttributes<Schema, Name>
+		: never
+	: never;
+
+type SpanInSchema<
+	Schema extends TelemetrySchemaDefinition,
+	Name extends string,
+> = Schema extends TelemetrySchemaDefinition
+	? Name extends TelemetrySchemaSpanName<Schema>
+		? SchemaTelemetrySpan<Schema, Name>
+		: never
+	: never;
+
+type DuplicateTelemetrySpanNames<
+	Schemas extends readonly TelemetrySchemaDefinition[],
+	Seen extends string = never,
+> = Schemas extends readonly [
+	infer Schema extends TelemetrySchemaDefinition,
+	...infer Rest extends readonly TelemetrySchemaDefinition[],
+]
+	?
+			| Extract<TelemetrySchemaSpanName<Schema>, Seen>
+			| DuplicateTelemetrySpanNames<Rest, Seen | TelemetrySchemaSpanName<Schema>>
+	: never;
+
+type UniqueTelemetrySchemas<Schemas extends TelemetrySchemaTuple> = [DuplicateTelemetrySpanNames<Schemas>] extends [
+	never,
+]
+	? unknown
+	: { readonly "duplicate telemetry span names": DuplicateTelemetrySpanNames<Schemas> };
+
+type UnionToIntersection<Union> = (Union extends unknown ? (value: Union) => void : never) extends (
+	value: infer Intersection,
+) => void
+	? Intersection
+	: never;
+
+type TypedSpanStarterForName<Schemas extends TelemetrySchemaTuple, Name extends SpanNameInSchemas<Schemas>> = <
+	const Attributes extends SpanStartAttributesInSchema<Schemas[number], Name>,
+	Result,
+>(
 	name: Name,
-	attributes: ExactTelemetryAttributes<AiSpanStartAttributes<Name>, Attributes>,
-	callback: (span: AiTelemetrySpan<Name>) => Result | Promise<Result>,
-): Promise<Result> {
-	return telemetryContext.startSpan({ name, attributes }, (span) => callback(span as AiTelemetrySpan<Name>));
+	attributes: ExactTelemetryAttributes<SpanStartAttributesInSchema<Schemas[number], Name>, Attributes>,
+	callback: (
+		span: SpanInSchema<Schemas[number], Name>,
+		startChildSpan: TypedSpanStarter<Schemas>,
+	) => Result | Promise<Result>,
+) => Promise<Result>;
+
+/** A per-span overload set bound to one explicit parent context and one or more schemas. */
+export type TypedSpanStarter<Schemas extends TelemetrySchemaTuple> = UnionToIntersection<
+	{
+		[Name in SpanNameInSchemas<Schemas>]: TypedSpanStarterForName<Schemas, Name>;
+	}[SpanNameInSchemas<Schemas>]
+>;
+
+function bindTypedSpanStarter<Schemas extends TelemetrySchemaTuple>(
+	telemetryContext: TelemetryContext,
+): TypedSpanStarter<Schemas> {
+	const startSpan = (
+		name: SpanNameInSchemas<Schemas>,
+		attributes: SpanAttributes,
+		callback: (
+			span: SpanInSchema<Schemas[number], SpanNameInSchemas<Schemas>>,
+			startChildSpan: TypedSpanStarter<Schemas>,
+		) => unknown,
+	): Promise<unknown> =>
+		telemetryContext.startSpan({ name, attributes }, (span) =>
+			callback(
+				span as SpanInSchema<Schemas[number], SpanNameInSchemas<Schemas>>,
+				bindTypedSpanStarter<Schemas>(span),
+			),
+		);
+
+	return startSpan as TypedSpanStarter<Schemas>;
 }
+
+/**
+ * Bind an explicit parent context to the combined span vocabulary of one or more schemas.
+ * Schema values are used only for type inference; no runtime schema validation is performed.
+ */
+export function createTypedSpanStarter<const Schemas extends TelemetrySchemaTuple>(
+	telemetryContext: TelemetryContext,
+	_schemas: Schemas & UniqueTelemetrySchemas<Schemas>,
+): TypedSpanStarter<Schemas> {
+	return bindTypedSpanStarter<Schemas>(telemetryContext);
+}
+
+export type { RecordedTelemetryEvent, RecordedTelemetrySpan } from "./memory.ts";
+export { InMemoryTelemetryContext } from "./memory.ts";
