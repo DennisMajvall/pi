@@ -1,6 +1,6 @@
 {
   "name": "@earendil-works/pi-platform",
-  "version": "0.83.0",
+  "version": "0.84.4",
   "description": "Capability platform contracts + walking-skeleton kernel for pi. Contract subpaths are implementation-free; /kernel is the minimal runtime.",
   "type": "module",
   "main": "./dist/index.js",
